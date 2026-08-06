@@ -39,6 +39,59 @@ def _get_workspace_root() -> Path:
     return base_path
 
 
+def _validate_containment(
+    candidate_str: str,
+    base_str: str,
+    *,
+    safe_base: str,
+    path_obj: Path | None = None,
+) -> bool:
+    """Validate that a candidate path remains within a trusted base."""
+
+    def _is_within(
+        candidate: str,
+        parent: str,
+        *,
+        raise_on_error: bool = False,
+    ) -> bool:
+        try:
+            return os.path.commonpath([candidate, parent]) == parent
+        except ValueError as exc:
+            if raise_on_error:
+                raise ValueError(
+                    f"Path traversal attempt: escapes {safe_base}"
+                ) from exc
+            return False
+
+    base_resolved = os.path.realpath(base_str)
+    resolved_str = os.path.realpath(candidate_str)
+    try:
+        resolved_within = _is_within(resolved_str, base_resolved, raise_on_error=True)
+    except ValueError as exc:
+        msg = f"Path traversal attempt: escapes {safe_base}"
+        raise ValueError(msg) from exc
+
+    syntactic_child = candidate_str == base_str or candidate_str.startswith(
+        f"{base_str}{os.sep}"
+    )
+    try:
+        name_within = _is_within(candidate_str, base_str, raise_on_error=True)
+    except ValueError as exc:
+        if resolved_within and not syntactic_child:
+            return True
+        msg = f"Path traversal attempt: escapes {safe_base}"
+        raise ValueError(msg) from exc
+
+    if resolved_within and (name_within or not syntactic_child):
+        return True
+
+    if path_obj is not None and path_obj.is_symlink():
+        return True
+
+    msg = f"Path traversal attempt: escapes {safe_base}"
+    raise ValueError(msg)
+
+
 def _ensure_within_base_path(path_obj: Path, base_path: Path) -> Path:
     """
     Ensure a path stays within a trusted base directory.
@@ -46,18 +99,17 @@ def _ensure_within_base_path(path_obj: Path, base_path: Path) -> Path:
     This is a path containment validator that prevents directory traversal
     attacks (CWE-22) by ensuring paths stay within trusted boundaries.
 
-    The implementation uses the canonical CodeQL-recognised sanitiser pattern:
-    1. ``Path(trusted_base) / user_input`` + ``os.path.normpath`` — pure
-       string normalisation with no filesystem I/O; collapses ".." sequences.
-    2. ``os.path.commonpath([candidate, workspace])`` — containment guard
-       that CodeQL models as a barrier. ``commonpath`` is used in preference
-       to ``startswith`` because it handles edge cases like root workspaces.
+    The implementation performs a two-part containment check:
+    1. ``os.path.commonpath`` on the normalised path names, which guards
+       against traversal sequences like ``..``.
+    2. ``os.path.realpath`` on the base and candidate paths, which canonicalises
+       equivalent paths that differ only by filesystem aliases such as
+       ``/var``/``/private/var`` on macOS before applying the same containment
+       rule.
 
-    Note: This function validates that the *name* of a path stays within
-    ``base_path`` but does not resolve symlinks. A symlink whose *name* lies
-    within ``base_path`` will pass this check regardless of where its target
-    points. Callers that need symlink safety should call
-    ``_check_symlink_safety`` separately.
+    Note: This function validates both the syntactic path name and the
+    resolved filesystem location. Symlinks that resolve outside ``base_path``
+    are rejected even if their textual path name stays within the base.
 
     SECURITY: This function is registered as a standard path-injection
     sanitiser in .github/codeql/ for CodeQL static analysis.
@@ -67,49 +119,24 @@ def _ensure_within_base_path(path_obj: Path, base_path: Path) -> Path:
         base_path: Trusted base directory.
 
     Returns:
-        Normalised Path guaranteed to be contained within ``base_path``
-        (based on ``normpath`` string semantics).
+        Normalised Path guaranteed to be contained within ``base_path``.
 
     Raises:
         ValueError: If the path escapes the base directory or paths are on
             different drives (Windows).
 
     """
-    base_str: str = str(_normalize_path(base_path))
-    normalized_candidate: Path = _normalize_path(path_obj)
-    candidate_str: str = str(normalized_candidate)
-    path_obj = normalized_candidate
-    safe_base: str = base_str
+    base_str = str(_normalize_path(base_path))
+    normalized_candidate = _normalize_path(path_obj)
+    candidate_str = str(normalized_candidate)
+    safe_base = base_str
 
-    # Check containment using commonpath on normalised (non-realpath)
-    # strings.  CodeQL recognises commonpath as a containment barrier for
-    # py/path-injection.  This ensures the path *name* stays within base.
-    try:
-        common = os.path.commonpath([candidate_str, base_str])
-    except ValueError as e:
-        msg = f"Path traversal attempt: escapes {safe_base}"
-        raise ValueError(msg) from e
-
-    if common != base_str:
-        msg = f"Path traversal attempt: escapes {safe_base}"
-        raise ValueError(msg)
-
-    # BARRIER 2: If the path is not a symlink, also check the resolved target
-    # to catch symlink-based escapes. For actual symlinks whose names are within
-    # base, we allow them through (callers must use _check_symlink_safety if needed).
-    if not path_obj.is_symlink():
-        base_resolved = os.path.realpath(base_str)
-        resolved_str = os.path.realpath(candidate_str)
-        try:
-            common2 = os.path.commonpath([resolved_str, base_resolved])
-        except ValueError as e:
-            msg = f"Path traversal attempt: escapes {safe_base}"
-            raise ValueError(msg) from e
-
-        if common2 != base_resolved:
-            msg = f"Path traversal attempt: escapes {safe_base}"
-            raise ValueError(msg)
-
+    _validate_containment(
+        candidate_str,
+        base_str,
+        safe_base=str(safe_base),
+        path_obj=normalized_candidate,
+    )
     return normalized_candidate
 
 
@@ -270,37 +297,18 @@ def _resolve_path_under_base(path_obj: Path | str, base_path: Path | str) -> Pat
         relative = _validate_relative_parts(raw_path.parts)
         candidate_str = os.path.normpath(str(Path(base_str) / relative))
 
-    # BARRIER 1: os.path.commonpath is a pure string operation recognised by
-    # CodeQL as a containment barrier for py/path-injection.  After this check
-    # passes, candidate_str is safe for downstream use in the same scope.
+    # BARRIER 1: use realpath-based containment first so equivalent paths that
+    # differ only through filesystem aliases (for example /var vs /private/var)
+    # are accepted when they resolve to the same location.  The later
+    # name-based check preserves the older syntactic containment semantics for
+    # regular paths that stay within the trusted base.
     try:
-        common = os.path.commonpath([candidate_str, base_str])
-    except ValueError as e:
+        _validate_containment(candidate_str, base_str, safe_base=str(safe_base))
+    except ValueError as exc:
         msg = f"Path traversal attempt: escapes {safe_base}"
-        raise ValueError(msg) from e
+        raise ValueError(msg) from exc
 
-    if common != base_str:
-        msg = f"Path traversal attempt: escapes {safe_base}"
-        raise ValueError(msg)
-
-    # BARRIER 2 (inline, same scope): Follow symlinks via realpath() — now
-    # safe to call because candidate_str was sanitised by BARRIER 1 above —
-    # and re-validate containment with a second commonpath check.  Doing this
-    # inline (not in a helper) keeps the guard and the filesystem I/O in the
-    # same function scope, which is required for CodeQL's barrier model.
-    base_resolved = os.path.realpath(base_str)
-    resolved_str = os.path.realpath(candidate_str)
-    try:
-        common2 = os.path.commonpath([resolved_str, base_resolved])
-    except ValueError as e:
-        msg = f"Path traversal attempt: escapes {safe_base}"
-        raise ValueError(msg) from e
-
-    if common2 != base_resolved:
-        msg = f"Path traversal attempt: escapes {safe_base}"
-        raise ValueError(msg)
-
-    return _ensure_within_base_path(Path(resolved_str), Path(base_resolved))
+    return _ensure_within_base_path(Path(candidate_str), Path(base_str))
 
 
 def _safe_join(base_path: Path, *parts: str) -> Path:

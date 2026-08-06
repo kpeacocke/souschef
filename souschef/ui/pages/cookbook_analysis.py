@@ -1011,10 +1011,16 @@ def _get_safe_cookbook_directory(cookbook_path):
         # Sanitise the candidate path using shared helper
         candidate = _normalize_path(path_str)
 
-        # Tempdir base is used only for containment validation.
+        # Allow the workspace root plus common temp directories for local
+        # cookbook analysis workflows. These bases are used only for
+        # containment validation, not for granting access to arbitrary system
+        # paths.
         # NOSONAR python:S5443
-        trusted_bases = [base_dir, Path(tempfile.gettempdir()).resolve()]
-        for base in trusted_bases:
+        trusted_bases = [base_dir, _normalize_path(tempfile.gettempdir())]
+        for extra_base in (Path("/tmp"), Path("/var/tmp")):
+            trusted_bases.append(_normalize_path(extra_base))
+
+        for base in dict.fromkeys(trusted_bases):
             try:
                 return _ensure_within_base_path(candidate, base)
             except ValueError:
