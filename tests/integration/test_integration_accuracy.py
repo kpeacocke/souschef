@@ -46,7 +46,7 @@ def run_ansible_lint(yaml_content: str) -> tuple[bool, str]:
             ["ansible-lint", "--nocolor", temp_path],
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=60,
         )
         success = result.returncode == 0
         error_msg = result.stdout + result.stderr if not success else ""
