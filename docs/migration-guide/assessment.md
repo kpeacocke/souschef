@@ -394,10 +394,10 @@ Each cookbook receives a risk score (1-10):
 
 ```python
 risk_score = (
-    technical_complexity * 0.35 +
-    dependency_complexity * 0.25 +
-    data_integration * 0.20 +
-    testing_coverage * 0.20
+    technical_complexity * 0.35
+    + dependency_complexity * 0.25
+    + data_integration * 0.20
+    + testing_coverage * 0.20
 )
 ```
 

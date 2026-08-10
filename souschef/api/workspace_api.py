@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any, cast
 
 from souschef.audit import log_event, log_role_change
@@ -250,15 +250,43 @@ def _filter_audit_events(
         if action_query and action_query not in event_action:
             continue
 
-        event_day = event.created_at[:10]
-        if date_from and event_day < date_from.isoformat():
+        event_day = _coerce_event_date(event.created_at)
+        if date_from and event_day < date_from:
             continue
-        if date_to and event_day > date_to.isoformat():
+        if date_to and event_day >= date_to:
             continue
 
         filtered.append(event)
 
     return filtered
+
+
+def _coerce_event_date(created_at: str | date | datetime) -> date:
+    """Normalise audit event timestamps into a calendar date."""
+    if isinstance(created_at, datetime):
+        return created_at.date()
+
+    if isinstance(created_at, date):
+        return created_at
+
+    text = created_at.strip()
+    if not text:
+        return date.today()
+
+    if "T" in text:
+        normalised = text.replace("Z", "+00:00")
+        try:
+            return datetime.fromisoformat(normalised).date()
+        except ValueError:
+            pass
+
+    if len(text) >= 10:
+        try:
+            return date.fromisoformat(text[:10])
+        except ValueError:
+            pass
+
+    return date.today()
 
 
 def create_approval_request(

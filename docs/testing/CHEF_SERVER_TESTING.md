@@ -334,7 +334,7 @@ headers = _build_auth_headers(
     b"",
     "your-client-name",
     "2026-02-16T12:00:00Z",
-    key
+    key,
 )
 
 print(headers)

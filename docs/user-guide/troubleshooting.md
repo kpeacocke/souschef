@@ -37,6 +37,7 @@ ValueError: Cookbook path does not exist: /path/to/cookbook
 3. **Use absolute paths:**
    ```python
    from pathlib import Path
+
    cookbook_path = Path("/opt/cookbooks/myapp").resolve()
    result = orchestrator.migrate_cookbook(str(cookbook_path))
    ```
@@ -67,6 +68,7 @@ ValueError: Cookbook path does not exist: /path/to/cookbook
 3. **Enable debug logging:**
    ```python
    import logging
+
    logging.basicConfig(level=logging.DEBUG)
 
    result = orchestrator.migrate_cookbook(cookbook_path)
@@ -108,6 +110,7 @@ Warnings: 12 resources need manual review
 
    # Review generated playbooks for REVIEW markers
    import re
+
    for playbook_path in result.playbooks_generated:
        with open(playbook_path) as f:
            content = f.read()
@@ -168,8 +171,8 @@ when: ansible_check_mode
 
        # Find and fix guard conditions
        for play in playbook:
-           for task in play.get('tasks', []):
-               if 'when' in task and 'REVIEW' in str(task['when']):
+           for task in play.get("tasks", []):
+               if "when" in task and "REVIEW" in str(task["when"]):
                    # Manual fix logic
                    print(f"Fix needed: {task['name']}")
    ```
@@ -431,18 +434,20 @@ Failed to create job template: missing required field 'inventory'
    ```python
    # Create in order
    inv = client.create_inventory("my-inv")
-   proj = client.create_project("my-project", scm_type="git",
-                                scm_url="https://github.com/org/repo")
+   proj = client.create_project(
+       "my-project", scm_type="git", scm_url="https://github.com/org/repo"
+   )
 
    # Wait for project sync
    import time
+
    time.sleep(5)
 
    # Then create job template
    jt = client.create_job_template(
        name="my-job",
-       inventory=inv['id'],
-       project=proj['id'],
+       inventory=inv["id"],
+       project=proj["id"],
        playbook="site.yml",
    )
    ```
@@ -477,6 +482,7 @@ Failed to create job template: missing required field 'inventory'
 
    # Validate later
    from souschef.core.validation import ValidationEngine
+
    engine = ValidationEngine()
    for playbook in result.playbooks_generated:
        engine.validate_playbook_file(playbook)
@@ -489,8 +495,10 @@ Failed to create job template: missing required field 'inventory'
 
    recipes = list(Path(cookbook_path / "recipes").glob("*.rb"))
 
+
    def migrate_recipe(recipe_path):
        return generate_playbook_from_recipe(str(recipe_path))
+
 
    with ThreadPoolExecutor(max_workers=4) as executor:
        playbooks = list(executor.map(migrate_recipe, recipes))
@@ -507,6 +515,7 @@ Failed to create job template: missing required field 'inventory'
 
    # Review slow operations
    import json
+
    with open("migration-profile.json") as f:
        profile = json.load(f)
        # Analyse timing data
@@ -533,6 +542,7 @@ Failed to create job template: missing required field 'inventory'
 2. **Disable caching:**
    ```python
    import os
+
    os.environ["SOUSCHEF_DISABLE_CACHE"] = "1"
    ```
 
@@ -605,9 +615,9 @@ nodes = chef_client.search_nodes("role:webserver")
    ```python
    # Correct search queries
    nodes = chef_client.search_nodes("role:webserver")  # By role
-   nodes = chef_client.search_nodes("name:app-*")     # By name pattern
-   nodes = chef_client.search_nodes("recipes:apache2") # By recipe
-   nodes = chef_client.search_nodes("platform:ubuntu") # By platform
+   nodes = chef_client.search_nodes("name:app-*")  # By name pattern
+   nodes = chef_client.search_nodes("recipes:apache2")  # By recipe
+   nodes = chef_client.search_nodes("platform:ubuntu")  # By platform
    ```
 
 2. **Check organization:**
@@ -717,7 +727,7 @@ import logging
 
 logging.basicConfig(
     level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
 # Now run migration
@@ -732,14 +742,14 @@ import traceback
 try:
     result = orchestrator.migrate_cookbook(cookbook_path)
 except Exception as e:
-    print("="*60)
+    print("=" * 60)
     print("DETAILED ERROR INFORMATION")
-    print("="*60)
+    print("=" * 60)
     print(f"Exception type: {type(e).__name__}")
     print(f"Exception message: {e}")
     print("\nFull traceback:")
     traceback.print_exc()
-    print("="*60)
+    print("=" * 60)
 ```
 
 ### Report Issues
@@ -765,6 +775,7 @@ When reporting issues, include:
 4. **Migration result (if available):**
    ```python
    import json
+
    print(json.dumps(result.to_dict(), indent=2))
    ```
 

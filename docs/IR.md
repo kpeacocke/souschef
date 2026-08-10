@@ -63,12 +63,12 @@ Represents an attribute or parameter with type information:
 
 ```python
 class IRAttribute:
-    name: str                                      # Attribute name
-    value: str | int | bool | dict | list | None # Attribute value
-    type_hint: str = "any"                         # Type hint for validation
-    required: bool = False                         # Whether attribute is required
-    default_value: ... = None                      # Default value if not specified
-    description: str = ""                          # Human-readable description
+    name: str  # Attribute name
+    value: str | int | bool | dict | list | None  # Attribute value
+    type_hint: str = "any"  # Type hint for validation
+    required: bool = False  # Whether attribute is required
+    default_value: ... = None  # Default value if not specified
+    description: str = ""  # Human-readable description
 ```
 
 #### IRGuard
@@ -77,10 +77,10 @@ Represents a conditional guard or predicate:
 
 ```python
 class IRGuard:
-    condition: str                  # Condition expression
-    type: str = "boolean"          # Condition type (boolean, shell, ruby, etc.)
-    negated: bool = False          # Whether condition is negated
-    metadata: IRMetadata           # Source tracking metadata
+    condition: str  # Condition expression
+    type: str = "boolean"  # Condition type (boolean, shell, ruby, etc.)
+    negated: bool = False  # Whether condition is negated
+    metadata: IRMetadata  # Source tracking metadata
 ```
 
 #### IRAction
@@ -89,13 +89,13 @@ Represents a discrete operation or state change:
 
 ```python
 class IRAction:
-    name: str                              # Action name
-    type: str                              # Action type
-    attributes: dict[str, IRAttribute]   # Action parameters
-    guards: list[IRGuard]                # Conditional guards
-    requires: list[str]                  # Node IDs this action depends on
-    notifies: list[str]                  # Node IDs to notify after execution
-    metadata: IRMetadata                 # Source tracking metadata
+    name: str  # Action name
+    type: str  # Action type
+    attributes: dict[str, IRAttribute]  # Action parameters
+    guards: list[IRGuard]  # Conditional guards
+    requires: list[str]  # Node IDs this action depends on
+    notifies: list[str]  # Node IDs to notify after execution
+    metadata: IRMetadata  # Source tracking metadata
 ```
 
 #### IRNode
@@ -104,17 +104,17 @@ Core IR node representing a configurable entity:
 
 ```python
 class IRNode:
-    node_id: str                          # Unique node identifier
-    node_type: IRNodeType                # Type of node
-    name: str                            # Human-readable name
-    source_type: SourceType              # Original source tool
-    actions: list[IRAction]              # Operations/actions
-    attributes: dict[str, IRAttribute]   # Node parameters
-    variables: dict[str, Any]            # Variables/values
-    dependencies: list[str]              # Node IDs this depends on
-    parent_id: str | None                # Optional parent node
-    metadata: IRMetadata                 # Source tracking
-    tags: dict[str, str]                 # Arbitrary tags/labels
+    node_id: str  # Unique node identifier
+    node_type: IRNodeType  # Type of node
+    name: str  # Human-readable name
+    source_type: SourceType  # Original source tool
+    actions: list[IRAction]  # Operations/actions
+    attributes: dict[str, IRAttribute]  # Node parameters
+    variables: dict[str, Any]  # Variables/values
+    dependencies: list[str]  # Node IDs this depends on
+    parent_id: str | None  # Optional parent node
+    metadata: IRMetadata  # Source tracking
+    tags: dict[str, str]  # Arbitrary tags/labels
 ```
 
 #### IRGraph
@@ -123,13 +123,13 @@ Directed acyclic graph of nodes representing complete infrastructure:
 
 ```python
 class IRGraph:
-    graph_id: str                        # Graph identifier
-    source_type: SourceType              # Original source tool
-    target_type: TargetType              # Target conversion tool
-    nodes: dict[str, IRNode]            # Nodes by ID
-    metadata: dict[str, Any]            # Graph-level metadata
-    created_at: str                      # Creation timestamp
-    version: str                         # IR version string
+    graph_id: str  # Graph identifier
+    source_type: SourceType  # Original source tool
+    target_type: TargetType  # Target conversion tool
+    nodes: dict[str, IRNode]  # Nodes by ID
+    metadata: dict[str, Any]  # Graph-level metadata
+    created_at: str  # Creation timestamp
+    version: str  # IR version string
 ```
 
 ### Key Operations
@@ -165,7 +165,8 @@ graph_data = graph.to_dict()
 
 # Save to file
 import json
-with open('graph.json', 'w') as f:
+
+with open("graph.json", "w") as f:
     json.dump(graph_data, f, indent=2)
 ```
 
@@ -179,9 +180,9 @@ Represents a semantic version with comparison operators:
 
 ```python
 class IRVersion:
-    major: int      # Major version (breaking changes)
-    minor: int      # Minor version (backward compatible features)
-    patch: int      # Patch version (bug fixes)
+    major: int  # Major version (breaking changes)
+    minor: int  # Minor version (backward compatible features)
+    patch: int  # Patch version (bug fixes)
 ```
 
 **Version Compatibility:**
@@ -216,10 +217,10 @@ Defines a transformation path between two IR schema versions:
 
 ```python
 class SchemaMigration:
-    from_version: IRVersion                    # Starting version
-    to_version: IRVersion                      # Target version
-    transformation: Callable[[dict], dict]    # Transformation function
-    description: str                           # Migration description
+    from_version: IRVersion  # Starting version
+    to_version: IRVersion  # Target version
+    transformation: Callable[[dict], dict]  # Transformation function
+    description: str  # Migration description
 ```
 
 ### IRVersionManager
@@ -233,7 +234,7 @@ manager = get_version_manager()
 manager.register_migration(SchemaMigration(...))
 
 # Find migration path
-migrations = manager.get_migrations_path(IRVersion(1,0,0), IRVersion(1,5,0))
+migrations = manager.get_migrations_path(IRVersion(1, 0, 0), IRVersion(1, 5, 0))
 
 # Migrate data
 migrated = manager.migrate_data(data, from_version, to_version)
@@ -335,6 +336,7 @@ To add support for a new source tool:
 ```python
 from souschef.ir import SourceParser, SourceType, IRGraph
 
+
 class CustomToolParser(SourceParser):
     @property
     def source_type(self) -> SourceType:
@@ -366,6 +368,7 @@ class CustomToolParser(SourceParser):
             "warnings": [],
         }
 
+
 # Register the parser
 registry = get_plugin_registry()
 registry.register_parser(SourceType.CUSTOM_TOOL, CustomToolParser)
@@ -377,6 +380,7 @@ To add support for a new target platform:
 
 ```python
 from souschef.ir import TargetGenerator, TargetType, IRGraph
+
 
 class CustomTargetGenerator(TargetGenerator):
     @property
@@ -399,6 +403,7 @@ class CustomTargetGenerator(TargetGenerator):
             "issues": [],
             "warnings": [],
         }
+
 
 # Register the generator
 registry = get_plugin_registry()

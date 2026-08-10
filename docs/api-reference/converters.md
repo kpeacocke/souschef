@@ -38,16 +38,16 @@ def convert_resource_to_task(resource: dict) -> dict:
         Ansible task dictionary
     """
     task = {
-        'name': f"Manage {resource['name']}",
-        'ansible.builtin.package': {
-            'name': resource['name'],
-            'state': 'present' if resource['action'] == 'install' else 'absent'
-        }
+        "name": f"Manage {resource['name']}",
+        "ansible.builtin.package": {
+            "name": resource["name"],
+            "state": "present" if resource["action"] == "install" else "absent",
+        },
     }
 
     # Add guards as when conditions
-    if resource.get('guards'):
-        task['when'] = convert_guards(resource['guards'])
+    if resource.get("guards"):
+        task["when"] = convert_guards(resource["guards"])
 
     return task
 ```
@@ -66,17 +66,15 @@ def convert_erb_to_jinja2(erb_content: str) -> str:
     """
     # Variable interpolation: <%= @var %> → {{ var }}
     jinja2 = erb_content
-    jinja2 = re.sub(r'<%=\s*@(\w+)\s*%>', r'{{ \1 }}', jinja2)
+    jinja2 = re.sub(r"<%=\s*@(\w+)\s*%>", r"{{ \1 }}", jinja2)
 
     # Conditionals: <% if @var %> → {% if var %}
-    jinja2 = re.sub(r'<%\s*if\s+@(\w+)\s*%>', r'{% if \1 %}', jinja2)
-    jinja2 = re.sub(r'<%\s*end\s*%>', r'{% endif %}', jinja2)
+    jinja2 = re.sub(r"<%\s*if\s+@(\w+)\s*%>", r"{% if \1 %}", jinja2)
+    jinja2 = re.sub(r"<%\s*end\s*%>", r"{% endif %}", jinja2)
 
     # Loops: <% @items.each do |item| %> → {% for item in items %}
     jinja2 = re.sub(
-        r'<%\s*@(\w+)\.each\s+do\s+\|(\w+)\|\s*%>',
-        r'{% for \2 in \1 %}',
-        jinja2
+        r"<%\s*@(\w+)\.each\s+do\s+\|(\w+)\|\s*%>", r"{% for \2 in \1 %}", jinja2
     )
 
     return jinja2
@@ -97,22 +95,23 @@ def convert_guards(guards: list) -> str:
     conditions = []
 
     for guard in guards:
-        if guard['type'] == 'only_if':
-            conditions.append(convert_condition(guard['condition']))
-        elif guard['type'] == 'not_if':
+        if guard["type"] == "only_if":
+            conditions.append(convert_condition(guard["condition"]))
+        elif guard["type"] == "not_if":
             conditions.append(f"not ({convert_condition(guard['condition'])})")
 
-    return ' and '.join(conditions)
+    return " and ".join(conditions)
+
 
 def convert_condition(condition: str) -> str:
     """Convert Ruby condition to Ansible."""
     # File existence: File.exist?('/path') → stat_result.stat.exists
-    if 'File.exist?' in condition:
+    if "File.exist?" in condition:
         path = re.search(r"File\.exist\?\(['\"](.*?)['\"]\)", condition).group(1)
         return f"stat_{path.replace('/', '_')}.stat.exists"
 
     # Command success: system('command') → command_result.rc == 0
-    if 'system(' in condition:
+    if "system(" in condition:
         return "command_result.rc == 0"
 
     return condition
@@ -129,13 +128,13 @@ from souschef.parsers.recipe import parse_recipe_file
 from souschef.converters.playbook import convert_to_playbook
 
 # Parse recipe
-parsed = parse_recipe_file('recipes/webserver.rb')
+parsed = parse_recipe_file("recipes/webserver.rb")
 
 # Convert to playbook
 playbook = convert_to_playbook(parsed)
 
 # Write output
-with open('webserver.yml', 'w') as f:
+with open("webserver.yml", "w") as f:
     f.write(playbook)
 ```
 
@@ -146,13 +145,13 @@ from souschef.parsers.resource import parse_custom_resource
 from souschef.converters.resource import convert_to_role
 
 # Parse custom resource
-resource = parse_custom_resource('resources/app_config.rb')
+resource = parse_custom_resource("resources/app_config.rb")
 
 # Convert to Ansible role
 role = convert_to_role(resource)
 
 # Generate role structure
-create_role_structure('roles/app_config', role)
+create_role_structure("roles/app_config", role)
 ```
 
 ### Habitat to Docker
@@ -162,13 +161,13 @@ from souschef.parsers.habitat import parse_habitat_plan
 from souschef.converters.habitat import convert_to_dockerfile
 
 # Parse Habitat plan
-plan = parse_habitat_plan('habitat/plan.sh')
+plan = parse_habitat_plan("habitat/plan.sh")
 
 # Convert to Dockerfile
 dockerfile = convert_to_dockerfile(plan)
 
 # Write Dockerfile
-with open('Dockerfile', 'w') as f:
+with open("Dockerfile", "w") as f:
     f.write(dockerfile)
 ```
 
@@ -182,16 +181,17 @@ For simple, one-to-one conversions:
 
 ```python
 RESOURCE_MAP = {
-    'package': 'ansible.builtin.package',
-    'service': 'ansible.builtin.service',
-    'file': 'ansible.builtin.file',
-    'directory': 'ansible.builtin.file',
-    'template': 'ansible.builtin.template',
+    "package": "ansible.builtin.package",
+    "service": "ansible.builtin.service",
+    "file": "ansible.builtin.file",
+    "directory": "ansible.builtin.file",
+    "template": "ansible.builtin.template",
 }
+
 
 def map_resource(resource_type: str) -> str:
     """Map Chef resource to Ansible module."""
-    return RESOURCE_MAP.get(resource_type, 'ansible.builtin.command')
+    return RESOURCE_MAP.get(resource_type, "ansible.builtin.command")
 ```
 
 ### Complex Logic Preservation
@@ -204,15 +204,15 @@ def convert_complex_resource(resource: dict) -> list[dict]:
     tasks = []
 
     # Pre-conditions
-    if resource.get('guards'):
-        tasks.extend(convert_guard_checks(resource['guards']))
+    if resource.get("guards"):
+        tasks.extend(convert_guard_checks(resource["guards"]))
 
     # Main action
     tasks.append(convert_main_action(resource))
 
     # Notifications
-    if resource.get('notifies'):
-        tasks.extend(convert_notifications(resource['notifies']))
+    if resource.get("notifies"):
+        tasks.extend(convert_notifications(resource["notifies"]))
 
     return tasks
 ```
@@ -225,6 +225,7 @@ def convert_complex_resource(resource: dict) -> list[dict]:
 
 ```python
 import yaml
+
 
 def validate_playbook_syntax(playbook_yaml: str) -> bool:
     """Validate generated playbook syntax."""
@@ -242,14 +243,14 @@ def validate_playbook_syntax(playbook_yaml: str) -> bool:
 def validate_conversion_logic(chef_resource: dict, ansible_task: dict) -> bool:
     """Validate that logic is preserved."""
     # Check action mapping
-    if chef_resource['action'] == 'install':
-        assert ansible_task['package']['state'] == 'present'
-    elif chef_resource['action'] == 'remove':
-        assert ansible_task['package']['state'] == 'absent'
+    if chef_resource["action"] == "install":
+        assert ansible_task["package"]["state"] == "present"
+    elif chef_resource["action"] == "remove":
+        assert ansible_task["package"]["state"] == "absent"
 
     # Check guards converted to when clauses
-    if chef_resource.get('guards'):
-        assert 'when' in ansible_task
+    if chef_resource.get("guards"):
+        assert "when" in ansible_task
 
     return True
 ```
@@ -344,10 +345,8 @@ result_json = convert_powershell_content_to_ansible(
     "playbook_yaml": "---\n- name: windows_setup\n  hosts: windows_servers\n  ...",
     "tasks_generated": 12,
     "win_shell_fallbacks": 2,
-    "warnings": [
-        "Line 42: Unrecognised pattern — falling back to win_shell"
-    ],
-    "source": "/absolute/path/to/setup.ps1"
+    "warnings": ["Line 42: Unrecognised pattern — falling back to win_shell"],
+    "source": "/absolute/path/to/setup.ps1",
 }
 ```
 

@@ -65,9 +65,10 @@ SousChef uses Click for CLI implementation:
 import click
 from souschef.parsers.recipe import RecipeParser
 
+
 @click.command()
-@click.argument('recipe_path', type=click.Path(exists=True))
-@click.option('--format', type=click.Choice(['text', 'json', 'yaml']), default='text')
+@click.argument("recipe_path", type=click.Path(exists=True))
+@click.option("--format", type=click.Choice(["text", "json", "yaml"]), default="text")
 def recipe(recipe_path: str, format: str) -> None:
     """Parse a Chef recipe."""
     parser = RecipeParser(recipe_path)

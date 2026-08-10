@@ -563,6 +563,7 @@ For very complex resources, create an Ansible module:
 #!/usr/bin/python
 from ansible.module_utils.basic import AnsibleModule
 
+
 def deploy_app(module, app_name, version, config):
     """Deploy application with complex logic."""
     changed = False
@@ -572,27 +573,28 @@ def deploy_app(module, app_name, version, config):
 
     return changed, "Deployment successful"
 
+
 def main():
     module = AnsibleModule(
         argument_spec=dict(
-            app_name=dict(type='str', required=True),
-            version=dict(type='str', required=True),
-            config=dict(type='dict', required=True),
-            state=dict(type='str', default='present',
-                      choices=['present', 'absent'])
+            app_name=dict(type="str", required=True),
+            version=dict(type="str", required=True),
+            config=dict(type="dict", required=True),
+            state=dict(type="str", default="present", choices=["present", "absent"]),
         )
     )
 
     changed, message = deploy_app(
         module,
-        module.params['app_name'],
-        module.params['version'],
-        module.params['config']
+        module.params["app_name"],
+        module.params["version"],
+        module.params["config"],
     )
 
     module.exit_json(changed=changed, msg=message)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
 ```
 

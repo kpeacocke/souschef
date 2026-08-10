@@ -73,8 +73,10 @@ class EnhancedErrorHandler:
     # Error message templates for common parsing issues
     INVALID_YAML_ERROR = (
         "Invalid YAML syntax in {file}",
-        "The YAML file contains syntax errors that prevent parsing. "
-        "Common causes: incorrect indentation, missing colons, invalid characters.",
+        (
+            "The YAML file contains syntax errors that prevent parsing. "
+            "Common causes: incorrect indentation, missing colons, invalid characters."
+        ),
         [
             "Check that all indentation uses spaces (not tabs)",
             "Verify all keys end with a colon (:)",
@@ -86,8 +88,10 @@ class EnhancedErrorHandler:
 
     INVALID_INI_ERROR = (
         "Invalid INI syntax in {file}",
-        "The INI file contains syntax errors. "
-        "Check for proper section headers and key=value pairs.",
+        (
+            "The INI file contains syntax errors. "
+            "Check for proper section headers and key=value pairs."
+        ),
         [
             "Section headers must be surrounded by brackets: [section_name]",
             "Key-value pairs must use format: key = value",
@@ -99,8 +103,10 @@ class EnhancedErrorHandler:
 
     MISSING_FILE_ERROR = (
         "File not found: {file}",
-        "The specified file cannot be located. "
-        "Check the file path and ensure the file exists.",
+        (
+            "The specified file cannot be located. "
+            "Check the file path and ensure the file exists."
+        ),
         [
             "Verify the file path is correct",
             "Check that the file has not been moved or deleted",
@@ -112,8 +118,10 @@ class EnhancedErrorHandler:
 
     VERSION_MISMATCH_ERROR = (
         "Ansible version mismatch",
-        "The specified Ansible version is not supported or recognised. "
-        "Check that you are using a valid Ansible-core version.",
+        (
+            "The specified Ansible version is not supported or recognised. "
+            "Check that you are using a valid Ansible-core version."
+        ),
         [
             "Valid versions: 2.9-2.20",
             "Use 'ansible --version' to check your current version",
@@ -124,8 +132,10 @@ class EnhancedErrorHandler:
 
     INVALID_COLLECTION_NAME = (
         "Invalid collection name format",
-        "Collection names must follow Ansible naming conventions. "
-        "Valid format: namespace.collection (e.g., community.general)",
+        (
+            "Collection names must follow Ansible naming conventions. "
+            "Valid format: namespace.collection (e.g., community.general)"
+        ),
         [
             "Ensure the collection name contains exactly one dot",
             "Both namespace and collection must start with a letter",
@@ -137,8 +147,10 @@ class EnhancedErrorHandler:
 
     INVALID_HOST_NAME = (
         "Invalid hostname format",
-        "The hostname does not meet Ansible standards. "
-        "Hostnames must be valid DNS names or IP addresses.",
+        (
+            "The hostname does not meet Ansible standards. "
+            "Hostnames must be valid DNS names or IP addresses."
+        ),
         [
             "DNS names can contain letters, digits, hyphens, and dots",
             "IP addresses must be valid IPv4 (x.x.x.x) or IPv6 format",

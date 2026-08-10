@@ -469,8 +469,10 @@ def _parse_and_assess_cookbooks(cookbook_paths: str) -> tuple[list, str | None]:
     if not valid_paths:
         return (
             [],
-            "Error: No valid cookbook paths found\n\n"
-            "Suggestion: Ensure paths exist and point to cookbook directories",
+            (
+                "Error: No valid cookbook paths found\n\n"
+                "Suggestion: Ensure paths exist and point to cookbook directories"
+            ),
         )
 
     cookbook_assessments = []

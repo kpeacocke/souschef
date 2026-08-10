@@ -64,7 +64,7 @@ class RecipeParser:
 def parse_file(filepath: str) -> dict:
     """Parse file with error handling."""
     try:
-        with open(filepath, 'r') as f:
+        with open(filepath, "r") as f:
             content = f.read()
         return parse(content)
     except FileNotFoundError:
@@ -85,10 +85,10 @@ def parse_file(filepath: str) -> dict:
 from souschef.parsers.recipe import parse_recipe_file
 
 # Parse a recipe
-result = parse_recipe_file('recipes/default.rb')
+result = parse_recipe_file("recipes/default.rb")
 
 # Access parsed data
-for resource in result['resources']:
+for resource in result["resources"]:
     print(f"{resource['type']}: {resource['name']}")
 ```
 
@@ -98,10 +98,10 @@ for resource in result['resources']:
 from souschef.parsers.template import parse_template_file
 
 # Parse ERB template
-result = parse_template_file('templates/config.erb')
+result = parse_template_file("templates/config.erb")
 
 # List all variables
-for var in result['variables']:
+for var in result["variables"]:
     print(f"Variable: {var}")
 ```
 
@@ -134,14 +134,15 @@ for attr in result['attributes']:
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
+
 def parse_cookbook_parallel(cookbook_path: str) -> dict:
     """Parse all recipes in parallel."""
-    recipes = list(Path(cookbook_path).glob('recipes/*.rb'))
+    recipes = list(Path(cookbook_path).glob("recipes/*.rb"))
 
     with ProcessPoolExecutor() as executor:
         results = executor.map(parse_recipe_file, recipes)
 
-    return {'recipes': list(results)}
+    return {"recipes": list(results)}
 ```
 
 ---
@@ -209,7 +210,10 @@ Parses PowerShell provisioning scripts (`.ps1`) and extracts structured actions 
 ### Python Usage
 
 ```python
-from souschef.parsers.powershell import parse_powershell_script, parse_powershell_content
+from souschef.parsers.powershell import (
+    parse_powershell_script,
+    parse_powershell_content,
+)
 import json
 
 # Parse from file path
@@ -221,7 +225,9 @@ print(f"Warnings: {len(result['warnings'])}")
 print(f"Metrics: {result['metrics']}")
 
 for action in result["actions"]:
-    print(f"  Line {action['source_line']}: {action['action_type']} (confidence: {action['confidence']})")
+    print(
+        f"  Line {action['source_line']}: {action['action_type']} (confidence: {action['confidence']})"
+    )
 
 # Parse from inline content
 script_content = """
@@ -246,14 +252,11 @@ result = json.loads(result_json)
             },
             "confidence": "high",
             "source_line": 1,
-            "requires_elevation": True
+            "requires_elevation": True,
         }
     ],
     "warnings": [],
-    "metrics": {
-        "windows_feature_install": 1,
-        "windows_service_configure": 1
-    }
+    "metrics": {"windows_feature_install": 1, "windows_service_configure": 1},
 }
 ```
 

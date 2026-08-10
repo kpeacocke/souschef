@@ -477,11 +477,14 @@ def test_function_name_scenario():
 
 ### Parameterized Test Structure
 ```python
-@pytest.mark.parametrize("input_value,expected_output", [
-    ("value1", "result1"),
-    ("value2", "result2"),
-    ("value3", "result3"),
-])
+@pytest.mark.parametrize(
+    "input_value,expected_output",
+    [
+        ("value1", "result1"),
+        ("value2", "result2"),
+        ("value3", "result3"),
+    ],
+)
 def test_function_with_multiple_inputs(input_value, expected_output):
     """Test function with various inputs."""
     result = function_name(input_value)
@@ -504,6 +507,7 @@ def test_parse_real_file():
 ```python
 from hypothesis import given, settings
 from hypothesis import strategies as st
+
 
 @given(st.text(min_size=1, max_size=100))
 @settings(max_examples=50)

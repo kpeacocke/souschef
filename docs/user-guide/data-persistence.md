@@ -57,7 +57,7 @@ from souschef.storage import get_blob_storage
 blob = get_blob_storage(
     backend="s3",
     bucket_name="souschef-artefacts",
-    region="us-east-1"
+    region="us-east-1",
     # access_key and secret_key from environment or explicit
 )
 
@@ -67,7 +67,7 @@ blob = get_blob_storage(
     bucket_name="souschef",
     endpoint_url="http://minio:9000",
     access_key="admin",
-    secret_key="password"
+    secret_key="password",
 )
 ```
 
@@ -184,7 +184,7 @@ analysis_id = storage.save_analysis(
     analysis_data={"details": "..."},
     ai_provider="anthropic",
     ai_model="claude-3-5-sonnet-20241022",
-    cookbook_blob_key="cookbooks/nginx/nginx-1.0.0.tar.gz"  # Optional: v3.7+
+    cookbook_blob_key="cookbooks/nginx/nginx-1.0.0.tar.gz",  # Optional: v3.7+
 )
 ```
 
@@ -193,9 +193,7 @@ analysis_id = storage.save_analysis(
 ```python
 # Check for cached analysis
 cached = storage.get_cached_analysis(
-    "/cookbooks/nginx",
-    ai_provider="anthropic",
-    ai_model="claude-3-5-sonnet-20241022"
+    "/cookbooks/nginx", ai_provider="anthropic", ai_model="claude-3-5-sonnet-20241022"
 )
 
 if cached:
@@ -218,10 +216,10 @@ conversion_id = storage.save_conversion(
         "parsed_result": {...},
         "roles_blob_key": "conversions/nginx/roles_20250202_123456",
         "repo_blob_key": "conversions/nginx/repo_20250202_123500",
-        "timestamp": "20250202_123456"
+        "timestamp": "20250202_123456",
     },
     analysis_id=analysis_id,
-    blob_storage_key="conversions/nginx/roles_20250202_123456"
+    blob_storage_key="conversions/nginx/roles_20250202_123456",
 )
 ```
 
@@ -242,17 +240,11 @@ from souschef.storage import get_blob_storage
 blob = get_blob_storage("local")
 
 # Upload directory (automatically zipped)
-storage_key = blob.upload(
-    Path("/tmp/nginx_role"),
-    "conversions/nginx_20250202_123456"
-)
+storage_key = blob.upload(Path("/tmp/nginx_role"), "conversions/nginx_20250202_123456")
 print(f"Uploaded to: {storage_key}")
 
 # Download later
-blob.download(
-    storage_key,
-    Path("/tmp/restored_nginx_role")
-)
+blob.download(storage_key, Path("/tmp/restored_nginx_role"))
 ```
 
 ## Environment Configuration
@@ -444,17 +436,13 @@ from souschef.storage import get_storage_manager
 
 storage = get_storage_manager()
 cache_key = storage.generate_cache_key(
-    "/path/to/cookbook",
-    ai_provider="anthropic",
-    ai_model="claude-3-5-sonnet-20241022"
+    "/path/to/cookbook", ai_provider="anthropic", ai_model="claude-3-5-sonnet-20241022"
 )
 print(f"Cache key: {cache_key}")
 
 # Check if cached entry exists
 cached = storage.get_cached_analysis(
-    "/path/to/cookbook",
-    ai_provider="anthropic",
-    ai_model="claude-3-5-sonnet-20241022"
+    "/path/to/cookbook", ai_provider="anthropic", ai_model="claude-3-5-sonnet-20241022"
 )
 print(f"Cached: {cached is not None}")
 ```

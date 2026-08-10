@@ -192,10 +192,13 @@ awx_config = {
 
 **Example Test Configuration**:
 ```python
-@pytest.mark.parametrize("origin,destination", [
-    ({"chef": "14.10.9", "auth": "1.3"}, {"platform": "awx", "version": "22.0"}),
-    ({"chef": "15.0.0", "auth": "1.3"}, {"platform": "aap", "version": "2.4"}),
-])
+@pytest.mark.parametrize(
+    "origin,destination",
+    [
+        ({"chef": "14.10.9", "auth": "1.3"}, {"platform": "awx", "version": "22.0"}),
+        ({"chef": "15.0.0", "auth": "1.3"}, {"platform": "aap", "version": "2.4"}),
+    ],
+)
 def test_migration_path(origin, destination):
     """Test specific Chef version → Ansible platform migration."""
     # Configure mock responses based on version capabilities
@@ -380,6 +383,7 @@ chef_version = "14.15.6"
 awx_version = "24.6.1"
 awx_platform = "awx"
 
+
 # Chef Server mock: SHA-256 auth (protocol 1.3)
 @pytest.fixture
 def chef_14_mock():
@@ -390,8 +394,9 @@ def chef_14_mock():
         "endpoints": [
             "/organizations/myorg/search/node",
             "/organizations/myorg/roles/webserver",
-        ]
+        ],
     }
+
 
 # AWX 24.6.1 mock: REQUIRES execution environments
 @pytest.fixture
@@ -404,8 +409,9 @@ def awx_24_mock():
         "job_template_required_fields": {
             "execution_environment": "REQUIRED",  # This is the key difference
             "custom_virtualenv": "IGNORED",  # Won't work
-        }
+        },
     }
+
 
 # IR transformation adapts to version combo
 def test_chef_14_to_awx_24():
@@ -433,7 +439,10 @@ def test_chef_14_to_awx_24():
     # Verify: AWX 24.6.1 requires execution_environment
     assert "execution_environment" in job_template
     assert job_template["execution_environment"] is not None
-    assert "custom_virtualenv" not in job_template or job_template["custom_virtualenv"] is None
+    assert (
+        "custom_virtualenv" not in job_template
+        or job_template["custom_virtualenv"] is None
+    )
 ```
 
 ### Example 2: Chef 12.x → AWX 22.x (transition period, supports both)
@@ -474,6 +483,7 @@ import pytest
 from unittest import mock
 from datetime import datetime
 
+
 @pytest.fixture
 def chef_15_aap_24_mocks():
     """Complete mock setup for Chef 15.10.91 → AAP 2.4.0 migration.
@@ -499,7 +509,7 @@ def chef_15_aap_24_mocks():
                         },
                         "normal": {
                             "run_list": ["role[webserver]", "recipe[nginx::default]"]
-                        }
+                        },
                     }
                 },
                 {
@@ -513,11 +523,11 @@ def chef_15_aap_24_mocks():
                         },
                         "normal": {
                             "run_list": ["role[app]", "recipe[chef-app::deploy]"]
-                        }
+                        },
                     }
-                }
+                },
             ],
-            "total": 2
+            "total": 2,
         }
         rsps.add(
             responses.GET,
@@ -527,7 +537,7 @@ def chef_15_aap_24_mocks():
             headers={
                 "X-Ops-API-Version": "2.1",
                 "Server": "Chef Server 15.10.91",
-            }
+            },
         )
 
         # Mock Chef Server role definitions
@@ -538,9 +548,9 @@ def chef_15_aap_24_mocks():
                 "name": "webserver",
                 "run_list": ["recipe[nginx::default]", "recipe[ssl::default]"],
                 "default_attributes": {"nginx": {"port": 80}},
-                "override_attributes": {}
+                "override_attributes": {},
             },
-            status=200
+            status=200,
         )
 
         rsps.add(
@@ -550,9 +560,9 @@ def chef_15_aap_24_mocks():
                 "name": "app",
                 "run_list": ["recipe[chef-app::deploy]", "recipe[nodejs::default]"],
                 "default_attributes": {"app": {"version": "2.1.0"}},
-                "override_attributes": {}
+                "override_attributes": {},
             },
-            status=200
+            status=200,
         )
 
         # ===== AAP 2.4.0 MOCKS (Execution Environments, Content Signing) =====
@@ -570,10 +580,10 @@ def chef_15_aap_24_mocks():
                     "content_signing": True,
                     "mesh": True,
                     "workflows": True,
-                }
+                },
             },
             status=200,
-            headers={"Server": "AWX 24.6.1 / AAP 2.4"}
+            headers={"Server": "AWX 24.6.1 / AAP 2.4"},
         )
 
         # Mock AAP create execution environment
@@ -585,9 +595,9 @@ def chef_15_aap_24_mocks():
                 "name": "ee-chef-migration",
                 "image": "quay.io/ansible/creator-ee:0.5.0",
                 "pull": "always",
-                "description": "EE for Chef 15.10.91 → AAP 2.4 migration"
+                "description": "EE for Chef 15.10.91 → AAP 2.4 migration",
             },
-            status=201
+            status=201,
         )
 
         # Mock AAP create inventory
@@ -599,9 +609,9 @@ def chef_15_aap_24_mocks():
                 "name": "Production-from-Chef",
                 "description": "Migrated from Chef Server 15.10.91",
                 "kind": "ssh",
-                "organization": 1
+                "organization": 1,
             },
-            status=201
+            status=201,
         )
 
         # Mock AAP add hosts to inventory
@@ -612,13 +622,17 @@ def chef_15_aap_24_mocks():
                 "id": 101,
                 "name": "web-prod-01",
                 "inventory": 1,
-                "variables": '{"ansible_host": "10.0.1.10", "platform": "ubuntu"}'
+                "variables": '{"ansible_host": "10.0.1.10", "platform": "ubuntu"}',
             },
             status=201,
-            match=[responses.matchers.json_params_matcher({
-                "name": "web-prod-01",
-                "variables": '{"ansible_host": "10.0.1.10", "platform": "ubuntu"}'
-            })]
+            match=[
+                responses.matchers.json_params_matcher(
+                    {
+                        "name": "web-prod-01",
+                        "variables": '{"ansible_host": "10.0.1.10", "platform": "ubuntu"}',
+                    }
+                )
+            ],
         )
 
         rsps.add(
@@ -628,13 +642,17 @@ def chef_15_aap_24_mocks():
                 "id": 102,
                 "name": "app-prod-01",
                 "inventory": 1,
-                "variables": '{"ansible_host": "10.0.2.10", "platform": "ubuntu"}'
+                "variables": '{"ansible_host": "10.0.2.10", "platform": "ubuntu"}',
             },
             status=201,
-            match=[responses.matchers.json_params_matcher({
-                "name": "app-prod-01",
-                "variables": '{"ansible_host": "10.0.2.10", "platform": "ubuntu"}'
-            })]
+            match=[
+                responses.matchers.json_params_matcher(
+                    {
+                        "name": "app-prod-01",
+                        "variables": '{"ansible_host": "10.0.2.10", "platform": "ubuntu"}',
+                    }
+                )
+            ],
         )
 
         # Mock AAP create project (for playbooks)
@@ -647,9 +665,9 @@ def chef_15_aap_24_mocks():
                 "scm_type": "git",
                 "scm_url": "https://git.example.com/migrations/chef-to-ansible.git",
                 "organization": 1,
-                "status": "new"
+                "status": "new",
             },
-            status=201
+            status=201,
         )
 
         # Mock AAP create job template - Chef 15.10.91 → AAP 2.4
@@ -679,7 +697,7 @@ def chef_15_aap_24_mocks():
                 "sign_key": "https://aap.example.com/api/v2/signing_keys/1/",
             },
             status=201,
-            headers={"X-Ansible-Cost": "10"}
+            headers={"X-Ansible-Cost": "10"},
         )
 
         yield rsps
@@ -743,7 +761,7 @@ def test_latest_chef_to_latest_aap(chef_15_aap_24_mocks):
         json={
             "name": "ee-chef-migration",
             "image": "quay.io/ansible/creator-ee:0.5.0",
-        }
+        },
     )
     ee_id = ee_response.json()["id"]
     print(f"  [OK] Created execution environment EE#{ee_id}")
@@ -755,7 +773,7 @@ def test_latest_chef_to_latest_aap(chef_15_aap_24_mocks):
         json={
             "name": "Production-from-Chef",
             "kind": "ssh",
-        }
+        },
     )
     inventory_id = inventory_response.json()["id"]
     print(f"  [OK] Created inventory ID#{inventory_id}")
@@ -767,11 +785,13 @@ def test_latest_chef_to_latest_aap(chef_15_aap_24_mocks):
             headers={"Authorization": "Bearer aap-token"},
             json={
                 "name": node["name"],
-                "variables": json.dumps({
-                    "ansible_host": node["automatic"]["ipaddress"],
-                    "platform": node["platform"],
-                })
-            }
+                "variables": json.dumps(
+                    {
+                        "ansible_host": node["automatic"]["ipaddress"],
+                        "platform": node["platform"],
+                    }
+                ),
+            },
         )
         print(f"    - Added host: {host_response.json()['name']}")
 
@@ -783,7 +803,7 @@ def test_latest_chef_to_latest_aap(chef_15_aap_24_mocks):
             "name": "chef-migrations",
             "scm_type": "git",
             "scm_url": "https://git.example.com/migrations/chef-to-ansible.git",
-        }
+        },
     )
     project_id = project_response.json()["id"]
     print(f"  [OK] Created project ID#{project_id}")
@@ -815,7 +835,10 @@ def test_latest_chef_to_latest_aap(chef_15_aap_24_mocks):
     assert job_template["content_signing"] is True
     print(f"  [OK] Content signing enabled: {job_template['content_signing']}")
 
-    assert "custom_virtualenv" not in job_template or job_template["custom_virtualenv"] is None
+    assert (
+        "custom_virtualenv" not in job_template
+        or job_template["custom_virtualenv"] is None
+    )
     print(f"  [OK] Legacy virtualenv NOT used (correct for AAP 2.4)")
 
     # ===== STAGE 5: Create in AAP =====
@@ -824,7 +847,7 @@ def test_latest_chef_to_latest_aap(chef_15_aap_24_mocks):
     jt_response = requests.post(
         "https://aap.example.com/api/v2/job_templates/",
         headers={"Authorization": "Bearer aap-token"},
-        json=job_template
+        json=job_template,
     )
 
     created_jt = jt_response.json()
@@ -837,7 +860,9 @@ def test_latest_chef_to_latest_aap(chef_15_aap_24_mocks):
     print(f"    - Signed: {created_jt['content_signing']}")
 
     print("\n[YES] SUCCESS: Chef 15.10.91 → AAP 2.4.0 migration complete!")
-    print(f"   {len(nodes)} nodes migrated to {1} job template with modern AAP features")
+    print(
+        f"   {len(nodes)} nodes migrated to {1} job template with modern AAP features"
+    )
 ```
 
 **Key Points - Chef 15.10.91 → AAP 2.4.0:**
@@ -1021,8 +1046,8 @@ Tests follow the actual migration workflow:
 Multiple mock responses configured in sequence:
 ```python
 responses.add(GET, chef_url, json=chef_data)  # Stage 1
-responses.add(GET, role_url, json=role_data)   # Stage 2
-responses.add(POST, awx_url, json=awx_data)    # Stage 3
+responses.add(GET, role_url, json=role_data)  # Stage 2
+responses.add(POST, awx_url, json=awx_data)  # Stage 3
 ```
 
 ### Pattern 3: Validation Metadata
@@ -1094,8 +1119,7 @@ server_version = response.headers.get("X-Ops-Server-API-Version", "unknown")
 **Via Config Endpoint**:
 ```python
 response = requests.get(
-    "https://awx.example.com/api/v2/config/",
-    headers={"Authorization": "Bearer token"}
+    "https://awx.example.com/api/v2/config/", headers={"Authorization": "Bearer token"}
 )
 config = response.json()
 print(f"AWX Version: {config['version']}")
@@ -1175,12 +1199,15 @@ else:
 
 **Test Origin Compatibility** (Chef Server versions):
 ```python
-@pytest.mark.parametrize("chef_version,auth_protocol", [
-    ("12.0", "1.0"),  # SHA-1 only
-    ("12.19", "1.3"), # First 1.3 support
-    ("14.0", "1.3"),  # SHA-256 preferred
-    ("15.0", "1.3"),  # SHA-256 default
-])
+@pytest.mark.parametrize(
+    "chef_version,auth_protocol",
+    [
+        ("12.0", "1.0"),  # SHA-1 only
+        ("12.19", "1.3"),  # First 1.3 support
+        ("14.0", "1.3"),  # SHA-256 preferred
+        ("15.0", "1.3"),  # SHA-256 default
+    ],
+)
 def test_chef_origin_versions(chef_version, auth_protocol):
     """Test Chef Server versions as migration origins."""
     # Configure mock with version-specific auth
@@ -1197,12 +1224,15 @@ def test_chef_origin_versions(chef_version, auth_protocol):
 
 **Test Destination Compatibility** (Ansible platforms):
 ```python
-@pytest.mark.parametrize("platform,version,ansible_version", [
-    ("tower", "3.8.6", "2.9.27"),   # Legacy
-    ("awx", "21.0", "2.12.0"),      # Transition (virtualenv → EE)
-    ("awx", "24.0", "2.16.0"),      # Current
-    ("aap", "2.4.0", "2.15.0"),     # Enterprise
-])
+@pytest.mark.parametrize(
+    "platform,version,ansible_version",
+    [
+        ("tower", "3.8.6", "2.9.27"),  # Legacy
+        ("awx", "21.0", "2.12.0"),  # Transition (virtualenv → EE)
+        ("awx", "24.0", "2.16.0"),  # Current
+        ("aap", "2.4.0", "2.15.0"),  # Enterprise
+    ],
+)
 def test_awx_destination_versions(platform, version, ansible_version):
     """Test Ansible platforms as migration destinations."""
     # Configure version-specific API mock
@@ -1228,23 +1258,26 @@ def test_awx_destination_versions(platform, version, ansible_version):
 
 **Test End-to-End Paths**:
 ```python
-@pytest.mark.parametrize("origin,destination", [
-    # Minimum supported: Chef 12.x → Tower 3.8
-    (
-        {"chef": "12.19", "auth": "1.3"},
-        {"platform": "tower", "version": "3.8.6", "ansible": "2.9"},
-    ),
-    # Mid-range: Chef 14.x → AWX 22.x
-    (
-        {"chef": "14.15", "auth": "1.3"},
-        {"platform": "awx", "version": "22.0", "ansible": "2.14"},
-    ),
-    # Current: Chef 15.x → AAP 2.4
-    (
-        {"chef": "15.0", "auth": "1.3"},
-        {"platform": "aap", "version": "2.4", "ansible": "2.15"},
-    ),
-])
+@pytest.mark.parametrize(
+    "origin,destination",
+    [
+        # Minimum supported: Chef 12.x → Tower 3.8
+        (
+            {"chef": "12.19", "auth": "1.3"},
+            {"platform": "tower", "version": "3.8.6", "ansible": "2.9"},
+        ),
+        # Mid-range: Chef 14.x → AWX 22.x
+        (
+            {"chef": "14.15", "auth": "1.3"},
+            {"platform": "awx", "version": "22.0", "ansible": "2.14"},
+        ),
+        # Current: Chef 15.x → AAP 2.4
+        (
+            {"chef": "15.0", "auth": "1.3"},
+            {"platform": "aap", "version": "2.4", "ansible": "2.15"},
+        ),
+    ],
+)
 def test_migration_path_compatibility(origin, destination):
     """Test complete Chef → Ansible migration paths."""
     # Stage 1: Query Chef Server (origin version)

@@ -82,6 +82,7 @@ The mock tests use the **`responses`** library to intercept HTTP requests and re
 ```python
 import responses
 
+
 @responses.activate
 def test_search_nodes():
     # Mock the Chef Server API response
@@ -89,7 +90,7 @@ def test_search_nodes():
         responses.GET,
         "https://chef.example.com/organizations/testorg/search/node",
         json={"rows": [{"name": "web-01", "platform": "ubuntu"}]},
-        status=200
+        status=200,
     )
 
     # Call the real Chef Server client
@@ -119,6 +120,7 @@ def test_search_nodes():
 import responses
 from souschef.core.chef_server import ChefServerClient, ChefServerConfig
 
+
 @responses.activate
 def test_my_chef_server_feature():
     # 1. Setup mock response
@@ -126,7 +128,7 @@ def test_my_chef_server_feature():
         responses.GET,  # HTTP method
         "https://chef.example.com/organizations/testorg/roles",  # URL
         json={"webserver": {"url": "..."}},  # Response body
-        status=200  # HTTP status code
+        status=200,  # HTTP status code
     )
 
     # 2. Create client config
@@ -135,7 +137,7 @@ def test_my_chef_server_feature():
         organisation="testorg",
         client_name="testclient",
         client_key=test_key,  # Use test RSA key
-        timeout=10
+        timeout=10,
     )
 
     # 3. Call the API
@@ -157,7 +159,7 @@ def test_auth_failure():
         responses.GET,
         "https://chef.example.com/organizations/testorg/search/node",
         json={"error": "Invalid signature"},
-        status=401
+        status=401,
     )
 
     client = ChefServerClient(config)
@@ -178,7 +180,7 @@ def test_query_params():
         "https://chef.example.com/organizations/testorg/search/node",
         json={"rows": []},
         status=200,
-        match=[responses.matchers.query_param_matcher({"q": "role:webserver"})]
+        match=[responses.matchers.query_param_matcher({"q": "role:webserver"})],
     )
 
     client = ChefServerClient(config)
@@ -197,7 +199,7 @@ def test_auth_headers():
         responses.GET,
         "https://chef.example.com/organizations/testorg/search/node",
         json={"rows": []},
-        status=200
+        status=200,
     )
 
     client = ChefServerClient(config)
@@ -229,13 +231,13 @@ responses.add(
                 "platform": "ubuntu",
                 "ipaddress": "10.0.1.10",
                 "fqdn": "web-01.example.com",
-                "automatic": {"platform": "ubuntu"}
+                "automatic": {"platform": "ubuntu"},
             }
         ],
         "total": 1,
-        "start": 0
+        "start": 0,
     },
-    status=200
+    status=200,
 )
 ```
 
@@ -247,9 +249,9 @@ responses.add(
     "https://chef.example.com/organizations/testorg/roles",
     json={
         "webserver": {"url": "https://chef.example.com/roles/webserver"},
-        "database": {"url": "https://chef.example.com/roles/database"}
+        "database": {"url": "https://chef.example.com/roles/database"},
     },
-    status=200
+    status=200,
 )
 ```
 
@@ -262,12 +264,10 @@ responses.add(
     json={
         "apache2": {
             "url": "https://chef.example.com/cookbooks/apache2",
-            "versions": [
-                {"url": "https://chef.example.com/cookbooks/apache2/8.6.0"}
-            ]
+            "versions": [{"url": "https://chef.example.com/cookbooks/apache2/8.6.0"}],
         }
     },
-    status=200
+    status=200,
 )
 ```
 
@@ -278,7 +278,7 @@ responses.add(
     responses.GET,
     "https://chef.example.com/organizations/testorg/search/node",
     json={"error": "Authentication failed"},
-    status=401
+    status=401,
 )
 ```
 
@@ -288,7 +288,7 @@ responses.add(
 responses.add(
     responses.GET,
     "https://chef.example.com/organizations/testorg/search/node",
-    body=Exception("Connection timeout")
+    body=Exception("Connection timeout"),
 )
 ```
 
@@ -301,6 +301,7 @@ import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
+
 @pytest.fixture
 def test_key() -> str:
     """Generate a test RSA private key."""
@@ -311,6 +312,7 @@ def test_key() -> str:
         encryption_algorithm=serialization.NoEncryption(),
     )
     return key_pem.decode("utf-8")
+
 
 @pytest.fixture
 def test_config(test_key: str) -> ChefServerConfig:

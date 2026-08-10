@@ -494,8 +494,10 @@ def _validate_canary_inputs(
     except ValueError as e:
         return (
             None,
-            f"Error: Invalid rollout steps '{rollout_steps}': {e}\n\n"
-            "Suggestion: Use comma-separated percentages like '10,25,50,100'",
+            (
+                f"Error: Invalid rollout steps '{rollout_steps}': {e}\n\n"
+                "Suggestion: Use comma-separated percentages like '10,25,50,100'"
+            ),
         )
 
 

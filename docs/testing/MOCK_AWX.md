@@ -90,6 +90,7 @@ Mock AWX testing uses the **`responses`** library to intercept HTTP requests:
 import responses
 import requests
 
+
 @responses.activate
 def test_awx_job_template():
     # Mock AWX API response
@@ -99,20 +100,16 @@ def test_awx_job_template():
         json={
             "count": 1,
             "results": [
-                {
-                    "id": 1,
-                    "name": "Deploy Apache",
-                    "playbook": "apache_deploy.yml"
-                }
-            ]
+                {"id": 1, "name": "Deploy Apache", "playbook": "apache_deploy.yml"}
+            ],
         },
-        status=200
+        status=200,
     )
 
     # Make real HTTP request (intercepted by responses)
     response = requests.get(
         "https://awx.example.com/api/v2/job_templates/",
-        headers={"Authorization": "Bearer test-token"}
+        headers={"Authorization": "Bearer test-token"},
     )
 
     # Verify response
@@ -128,24 +125,22 @@ def test_awx_job_template():
 import responses
 import requests
 
+
 @responses.activate
 def test_my_awx_feature():
     # 1. Setup mock AWX response
     responses.add(
         responses.POST,
         "https://awx.example.com/api/v2/job_templates/1/launch/",
-        json={
-            "job": 42,
-            "status": "pending"
-        },
-        status=201
+        json={"job": 42, "status": "pending"},
+        status=201,
     )
 
     # 2. Make API call
     response = requests.post(
         "https://awx.example.com/api/v2/job_templates/1/launch/",
         json={"extra_vars": {"env": "prod"}},
-        headers={"Authorization": "Bearer test-token"}
+        headers={"Authorization": "Bearer test-token"},
     )
 
     # 3. Assert results
@@ -163,7 +158,7 @@ def test_launch_and_monitor_job():
         responses.POST,
         "https://awx.example.com/api/v2/job_templates/1/launch/",
         json={"job": 42, "status": "pending"},
-        status=201
+        status=201,
     )
 
     # Mock job status check
@@ -171,20 +166,20 @@ def test_launch_and_monitor_job():
         responses.GET,
         "https://awx.example.com/api/v2/jobs/42/",
         json={"id": 42, "status": "successful", "failed": False},
-        status=200
+        status=200,
     )
 
     # Launch job
     launch_response = requests.post(
         "https://awx.example.com/api/v2/job_templates/1/launch/",
-        headers={"Authorization": "Bearer test-token"}
+        headers={"Authorization": "Bearer test-token"},
     )
     job_id = launch_response.json()["job"]
 
     # Check job status
     status_response = requests.get(
         f"https://awx.example.com/api/v2/jobs/{job_id}/",
-        headers={"Authorization": "Bearer test-token"}
+        headers={"Authorization": "Bearer test-token"},
     )
 
     assert status_response.json()["status"] == "successful"
@@ -200,7 +195,7 @@ def test_workflow_execution():
         responses.POST,
         "https://awx.example.com/api/v2/workflow_job_templates/1/launch/",
         json={"workflow_job": 25, "status": "pending"},
-        status=201
+        status=201,
     )
 
     # Mock workflow status
@@ -212,16 +207,16 @@ def test_workflow_execution():
             "status": "successful",
             "workflow_nodes": [
                 {"job": 42, "status": "successful"},
-                {"job": 43, "status": "successful"}
-            ]
+                {"job": 43, "status": "successful"},
+            ],
         },
-        status=200
+        status=200,
     )
 
     # Launch workflow
     response = requests.post(
         "https://awx.example.com/api/v2/workflow_job_templates/1/launch/",
-        headers={"Authorization": "Bearer test-token"}
+        headers={"Authorization": "Bearer test-token"},
     )
 
     workflow_job_id = response.json()["workflow_job"]
@@ -229,7 +224,7 @@ def test_workflow_execution():
     # Check workflow status
     status = requests.get(
         f"https://awx.example.com/api/v2/workflow_jobs/{workflow_job_id}/",
-        headers={"Authorization": "Bearer test-token"}
+        headers={"Authorization": "Bearer test-token"},
     )
 
     assert status.json()["status"] == "successful"
@@ -245,7 +240,7 @@ def test_inventory_sync():
         responses.POST,
         "https://awx.example.com/api/v2/inventory_sources/5/update/",
         json={"inventory_update": 15, "status": "pending"},
-        status=202
+        status=202,
     )
 
     # Mock inventory update status
@@ -253,13 +248,13 @@ def test_inventory_sync():
         responses.GET,
         "https://awx.example.com/api/v2/inventory_updates/15/",
         json={"id": 15, "status": "successful", "total_hosts": 50},
-        status=200
+        status=200,
     )
 
     # Trigger sync
     sync_response = requests.post(
         "https://awx.example.com/api/v2/inventory_sources/5/update/",
-        headers={"Authorization": "Bearer test-token"}
+        headers={"Authorization": "Bearer test-token"},
     )
 
     update_id = sync_response.json()["inventory_update"]
@@ -267,7 +262,7 @@ def test_inventory_sync():
     # Check sync status
     status = requests.get(
         f"https://awx.example.com/api/v2/inventory_updates/{update_id}/",
-        headers={"Authorization": "Bearer test-token"}
+        headers={"Authorization": "Bearer test-token"},
     )
 
     assert status.json()["total_hosts"] == 50
@@ -285,12 +280,9 @@ responses.add(
         "count": 100,
         "next": "/api/v2/job_templates/?page=2",
         "previous": None,
-        "results": [
-            {"id": 1, "name": "Template 1"},
-            {"id": 2, "name": "Template 2"}
-        ]
+        "results": [{"id": 1, "name": "Template 1"}, {"id": 2, "name": "Template 2"}],
     },
-    status=200
+    status=200,
 )
 ```
 
@@ -300,12 +292,8 @@ responses.add(
 responses.add(
     responses.POST,
     "https://awx.example.com/api/v2/job_templates/",
-    json={
-        "id": 3,
-        "name": "New Template",
-        "created": "2026-02-16T12:00:00Z"
-    },
-    status=201
+    json={"id": 3, "name": "New Template", "created": "2026-02-16T12:00:00Z"},
+    status=201,
 )
 ```
 
@@ -315,12 +303,8 @@ responses.add(
 responses.add(
     responses.PATCH,
     "https://awx.example.com/api/v2/job_templates/1/",
-    json={
-        "id": 1,
-        "name": "Updated Template",
-        "modified": "2026-02-16T12:00:00Z"
-    },
-    status=200
+    json={"id": 1, "name": "Updated Template", "modified": "2026-02-16T12:00:00Z"},
+    status=200,
 )
 ```
 
@@ -330,7 +314,7 @@ responses.add(
 responses.add(
     responses.DELETE,
     "https://awx.example.com/api/v2/job_templates/1/",
-    status=204  # No content
+    status=204,  # No content
 )
 ```
 
@@ -341,7 +325,7 @@ responses.add(
     responses.GET,
     "https://awx.example.com/api/v2/job_templates/",
     json={"detail": "Authentication credentials were not provided."},
-    status=401
+    status=401,
 )
 ```
 
@@ -372,7 +356,7 @@ responses.add(
     responses.POST,
     "https://awx.example.com/api/o/token/",
     json={"access_token": "test-token", "expires_in": 36000},
-    status=200
+    status=200,
 )
 ```
 
@@ -388,15 +372,15 @@ def test_invalid_job_template():
         "https://awx.example.com/api/v2/job_templates/",
         json={
             "name": ["This field is required."],
-            "inventory": ["Invalid inventory ID."]
+            "inventory": ["Invalid inventory ID."],
         },
-        status=400
+        status=400,
     )
 
     response = requests.post(
         "https://awx.example.com/api/v2/job_templates/",
         json={"description": "Missing required fields"},
-        headers={"Authorization": "Bearer test-token"}
+        headers={"Authorization": "Bearer test-token"},
     )
 
     assert response.status_code == 400
@@ -412,12 +396,12 @@ def test_insufficient_permissions():
         responses.POST,
         "https://awx.example.com/api/v2/job_templates/1/launch/",
         json={"detail": "You do not have permission to perform this action."},
-        status=403
+        status=403,
     )
 
     response = requests.post(
         "https://awx.example.com/api/v2/job_templates/1/launch/",
-        headers={"Authorization": "Bearer limited-token"}
+        headers={"Authorization": "Bearer limited-token"},
     )
 
     assert response.status_code == 403
@@ -432,12 +416,12 @@ def test_template_not_found():
         responses.GET,
         "https://awx.example.com/api/v2/job_templates/999/",
         json={"detail": "Not found."},
-        status=404
+        status=404,
     )
 
     response = requests.get(
         "https://awx.example.com/api/v2/job_templates/999/",
-        headers={"Authorization": "Bearer test-token"}
+        headers={"Authorization": "Bearer test-token"},
     )
 
     assert response.status_code == 404
@@ -450,9 +434,14 @@ def test_template_not_found():
 ```python
 @responses.activate
 def test_with_debugging():
-    responses.add(responses.GET, "https://awx.example.com/api/v2/jobs/42/", json={}, status=200)
+    responses.add(
+        responses.GET, "https://awx.example.com/api/v2/jobs/42/", json={}, status=200
+    )
 
-    requests.get("https://awx.example.com/api/v2/jobs/42/", headers={"Authorization": "Bearer test"})
+    requests.get(
+        "https://awx.example.com/api/v2/jobs/42/",
+        headers={"Authorization": "Bearer test"},
+    )
 
     # Debug: see what was sent
     print(f"Total requests: {len(responses.calls)}")
@@ -470,13 +459,15 @@ def test_with_query_params():
         "https://awx.example.com/api/v2/job_templates/",
         json={"results": []},
         status=200,
-        match=[responses.matchers.query_param_matcher({"page": "2", "page_size": "20"})]
+        match=[
+            responses.matchers.query_param_matcher({"page": "2", "page_size": "20"})
+        ],
     )
 
     # This will only match if query params are exactly as specified
     response = requests.get(
         "https://awx.example.com/api/v2/job_templates/",
-        params={"page": 2, "page_size": 20}
+        params={"page": 2, "page_size": 20},
     )
 ```
 
@@ -521,7 +512,7 @@ def test_chef_to_awx_migration():
         responses.GET,
         "https://chef.example.com/organizations/default/search/node",
         json={"rows": [{"name": "web-01", "platform": "ubuntu"}]},
-        status=200
+        status=200,
     )
 
     # Mock AWX inventory creation
@@ -529,7 +520,7 @@ def test_chef_to_awx_migration():
         responses.POST,
         "https://awx.example.com/api/v2/inventories/",
         json={"id": 5, "name": "Chef Migrated Hosts"},
-        status=201
+        status=201,
     )
 
     # Mock AWX host creation
@@ -537,7 +528,7 @@ def test_chef_to_awx_migration():
         responses.POST,
         "https://awx.example.com/api/v2/inventories/5/hosts/",
         json={"id": 10, "name": "web-01"},
-        status=201
+        status=201,
     )
 
     # Your migration code here...

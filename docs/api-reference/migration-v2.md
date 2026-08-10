@@ -464,9 +464,7 @@ if result.status == MigrationStatus.PARTIAL_SUCCESS:
 storage = StorageManager(database_url="sqlite:///migrations.db")
 
 # Production: PostgreSQL
-storage = StorageManager(
-    database_url="postgresql://user:pass@localhost/migrations"
-)
+storage = StorageManager(database_url="postgresql://user:pass@localhost/migrations")
 
 orchestrator = MigrationOrchestrator(..., storage_manager=storage)
 ```
@@ -486,6 +484,7 @@ result = orchestrator.migrate_cookbook(
 
 # Validate later with dedicated tool
 from souschef.core.validation import ValidationEngine
+
 engine = ValidationEngine()
 for playbook in result.playbooks_generated:
     engine.validate_playbook_file(playbook)

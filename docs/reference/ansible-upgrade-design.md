@@ -140,14 +140,18 @@ def scan_playbook_for_version_issues(playbook_path: str) -> dict
 def assess_ansible_environment(environment_path: str) -> dict:
     """Assess current Ansible environment for upgrade readiness."""
 
+
 def generate_upgrade_plan(current_version: str, target_version: str) -> dict:
     """Generate detailed upgrade plan with steps, risks, timeline."""
+
 
 def validate_collection_compatibility(collections: List[str], target: str) -> dict:
     """Check collection compatibility with target version."""
 
+
 def generate_upgrade_testing_plan(environment_path: str) -> str:
     """Generate testing plan for upgrade validation."""
+
 
 def assess_python_upgrade_impact(current: str, target: str, ansible: str) -> dict:
     """Assess Python upgrade impact on Ansible."""
@@ -211,17 +215,23 @@ Five new tools registered in `server.py`:
 def assess_ansible_upgrade_readiness(environment_path: str) -> str:
     """Assess current Ansible environment for upgrade readiness."""
 
+
 @mcp.tool()
 def plan_ansible_upgrade(environment_path: str, target_version: str) -> str:
     """Generate detailed Ansible upgrade plan."""
+
 
 @mcp.tool()
 def check_ansible_eol_status(version: str) -> str:
     """Check if Ansible version is EOL or approaching EOL."""
 
+
 @mcp.tool()
-def validate_ansible_collection_compatibility(collections_file: str, target_version: str) -> str:
+def validate_ansible_collection_compatibility(
+    collections_file: str, target_version: str
+) -> str:
     """Validate collection compatibility with target Ansible version."""
+
 
 @mcp.tool()
 def generate_ansible_upgrade_test_plan(environment_path: str) -> str:
@@ -326,7 +336,9 @@ def calculate_upgrade_path(current: str, target: str) -> dict:
     python_upgrade_needed = current_python not in target_python_versions
 
     # Assess risk
-    risk_level = "High" if len(risk_factors) >= 2 else "Medium" if risk_factors else "Low"
+    risk_level = (
+        "High" if len(risk_factors) >= 2 else "Medium" if risk_factors else "Low"
+    )
 
     return {
         "from_version": current,
@@ -336,7 +348,7 @@ def calculate_upgrade_path(current: str, target: str) -> dict:
         "breaking_changes": breaking_changes,
         "python_upgrade_needed": python_upgrade_needed,
         "risk_level": risk_level,
-        "estimated_effort_days": effort_days
+        "estimated_effort_days": effort_days,
     }
 ```
 
@@ -352,7 +364,7 @@ def get_eol_status(version: str) -> dict:
             "days_overdue": (today - eol_date).days,
             "status": "End of Life",
             "security_risk": "HIGH",
-            "message": "Reached EOL {days} days ago. Upgrade immediately!"
+            "message": "Reached EOL {days} days ago. Upgrade immediately!",
         }
     elif (eol_date - today).days < 90:
         return {
@@ -361,14 +373,10 @@ def get_eol_status(version: str) -> dict:
             "days_remaining": (eol_date - today).days,
             "status": "EOL Approaching",
             "security_risk": "MEDIUM",
-            "message": "Will reach EOL in {days} days. Plan upgrade soon."
+            "message": "Will reach EOL in {days} days. Plan upgrade soon.",
         }
     else:
-        return {
-            "is_eol": False,
-            "status": "Supported",
-            "security_risk": "LOW"
-        }
+        return {"is_eol": False, "status": "Supported", "security_risk": "LOW"}
 ```
 
 ---
@@ -719,6 +727,7 @@ def get_eol_status(version: str) -> dict:
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+
 @given(st.text(min_size=1, max_size=10))
 @settings(max_examples=50)
 def test_eol_status_handles_invalid_versions(version):
@@ -814,7 +823,7 @@ Calculate safe upgrade path between versions.
     "risk_level": str,  # "Low", "Medium", "High"
     "risk_factors": List[str],
     "estimated_effort_days": float,
-    "collection_updates_needed": dict
+    "collection_updates_needed": dict,
 }
 ```
 
@@ -841,7 +850,7 @@ Check EOL status of an Ansible version.
     "days_remaining": Optional[int],  # If not EOL
     "status": str,  # "Supported", "EOL Approaching", "End of Life"
     "message": str,
-    "security_risk": str  # "LOW", "MEDIUM", "HIGH"
+    "security_risk": str,  # "LOW", "MEDIUM", "HIGH"
 }
 ```
 
@@ -871,7 +880,7 @@ Assess Ansible environment for upgrade readiness.
     "playbooks_scanned": int,
     "compatibility_issues": List[str],
     "recommendations": List[str],
-    "version_info": AnsibleVersion
+    "version_info": AnsibleVersion,
 }
 ```
 
@@ -902,7 +911,7 @@ Generate detailed upgrade plan.
     "rollback_plan": List[str],
     "estimated_downtime_hours": float,
     "risk_assessment": dict,
-    "testing_plan": dict
+    "testing_plan": dict,
 }
 ```
 
@@ -929,15 +938,14 @@ Validate collection compatibility with target version.
     "compatible": int,
     "incompatible": int,
     "unknown": int,
-    "details": List[dict]  # Per-collection results
+    "details": List[dict],  # Per-collection results
 }
 ```
 
 **Example**:
 ```python
 result = validate_collection_compatibility(
-    ["ansible.posix", "community.general"],
-    "2.16"
+    ["ansible.posix", "community.general"], "2.16"
 )
 ```
 

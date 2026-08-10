@@ -37,6 +37,7 @@ from mcp import FastMCP
 
 mcp = FastMCP("SousChef")
 
+
 @mcp.tool()
 def my_chef_tool(cookbook_path: str) -> str:
     """Parse a Chef cookbook.

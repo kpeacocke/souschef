@@ -165,9 +165,7 @@ for recipe in changed_recipes:
 from souschef.parsers.template import parse_template
 
 templates = find_all_templates(cookbook_path)
-parsed_templates = {
-    t: parse_template(t) for t in templates
-}
+parsed_templates = {t: parse_template(t) for t in templates}
 
 # Reuse parsed templates during conversion
 for recipe in recipes:
@@ -218,10 +216,10 @@ export SOUSCHEF_PROFILE=1
 ```python
 # In your conversion script
 config = {
-    "max_workers": 4,           # Parallel workers
-    "cache_templates": True,    # Cache parsed templates
-    "validate_output": False,   # Skip validation for speed
-    "ai_batch_size": 10,       # AI request batch size
+    "max_workers": 4,  # Parallel workers
+    "cache_templates": True,  # Cache parsed templates
+    "validate_output": False,  # Skip validation for speed
+    "ai_batch_size": 10,  # AI request batch size
 }
 
 convert_cookbook(path, **config)
@@ -255,7 +253,7 @@ result = assess_cookbook("path/to/cookbook")
 
 profiler.disable()
 stats = pstats.Stats(profiler)
-stats.sort_stats('cumulative')
+stats.sort_stats("cumulative")
 stats.print_stats(20)  # Top 20 functions
 ```
 
@@ -364,8 +362,8 @@ def test_benchmark_my_new_feature(benchmark):
     result = benchmark(my_new_feature, input_data)
 
     # Assert performance requirements
-    assert benchmark.stats['mean'] < 0.001  # <1ms mean
-    assert benchmark.stats['max'] < 0.010   # <10ms max
+    assert benchmark.stats["mean"] < 0.001  # <1ms mean
+    assert benchmark.stats["max"] < 0.010  # <10ms max
 ```
 
 See the integration test examples in the repository: https://github.com/kpeacocke/souschef/blob/main/tests/integration/test_integration.py

@@ -1547,9 +1547,11 @@ def _analyze_all_cookbooks_holistically(
                 "cookbook_assessments": results,
                 "recommendations": "AI-enhanced per-cookbook recommendations above",
             }
+            model_display = _get_ai_string_value(
+                ai_config, "model", "claude-3-5-sonnet-20241022"
+            )
             st.session_state.analysis_info_messages = [
-                f"Using AI-enhanced analysis with {provider_name} "
-                f"({_get_ai_string_value(ai_config, 'model', 'claude-3-5-sonnet-20241022')})",  # noqa: E501
+                (f"Using AI-enhanced analysis with {provider_name} ({model_display})"),
                 f"Detected {len(cookbook_data)} cookbook(s)",
             ]
         else:

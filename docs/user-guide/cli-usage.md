@@ -631,6 +631,7 @@ souschef-cli inspec-convert PATH [--format FORMAT]
         nginx = host.package("nginx")
         assert nginx.is_installed
 
+
     def test_nginx_running(host):
         nginx = host.service("nginx")
         assert nginx.is_running

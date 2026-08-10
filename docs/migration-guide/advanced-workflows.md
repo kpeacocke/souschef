@@ -58,9 +58,9 @@ failed_cookbooks = []
 
 for cookbook_name in cookbooks:
     cookbook_path = f"/opt/chef-repo/cookbooks/{cookbook_name}"
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Migrating: {cookbook_name}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     try:
         result = orchestrator.migrate_cookbook(
@@ -80,7 +80,9 @@ for cookbook_name in cookbooks:
         # Report
         if result.status == MigrationStatus.SUCCESS:
             print(f"[OK] {cookbook_name}: SUCCESS")
-            print(f"  - Recipes: {result.metrics.recipes_converted}/{result.metrics.recipes_total}")
+            print(
+                f"  - Recipes: {result.metrics.recipes_converted}/{result.metrics.recipes_total}"
+            )
             print(f"  - Tasks: {result.metrics.tasks_generated}")
         elif result.status == MigrationStatus.PARTIAL_SUCCESS:
             print(f"WARNING {cookbook_name}: PARTIAL SUCCESS")
@@ -98,12 +100,16 @@ for cookbook_name in cookbooks:
         failed_cookbooks.append(cookbook_name)
 
 # Summary
-print(f"\n{'='*60}")
+print(f"\n{'=' * 60}")
 print("MIGRATION SUMMARY")
-print(f"{'='*60}")
+print(f"{'=' * 60}")
 print(f"Total: {len(cookbooks)} cookbooks")
-print(f"Successful: {len([c for c, m in migration_map.items() if m['status'] == MigrationStatus.SUCCESS])}")
-print(f"Partial: {len([c for c, m in migration_map.items() if m['status'] == MigrationStatus.PARTIAL_SUCCESS])}")
+print(
+    f"Successful: {len([c for c, m in migration_map.items() if m['status'] == MigrationStatus.SUCCESS])}"
+)
+print(
+    f"Partial: {len([c for c, m in migration_map.items() if m['status'] == MigrationStatus.PARTIAL_SUCCESS])}"
+)
 print(f"Failed: {len(failed_cookbooks)}")
 
 if failed_cookbooks:
@@ -113,16 +119,18 @@ if failed_cookbooks:
 # Generate migration report
 with open("migration-report.txt", "w") as f:
     f.write("Chef Repository Migration Report\n")
-    f.write("="*60 + "\n\n")
+    f.write("=" * 60 + "\n\n")
     for cookbook, data in migration_map.items():
         f.write(f"\n{cookbook}:\n")
         f.write(f"  Status: {data['status'].name}\n")
         f.write(f"  Migration ID: {data['migration_id']}\n")
         f.write(f"  Playbooks: {len(data['playbooks'])}\n")
-        metrics = data['metrics']
+        metrics = data["metrics"]
         f.write(f"  Metrics:\n")
         f.write(f"    - Recipes: {metrics.recipes_converted}/{metrics.recipes_total}\n")
-        f.write(f"    - Resources: {metrics.resources_converted}/{metrics.resources_total}\n")
+        f.write(
+            f"    - Resources: {metrics.resources_converted}/{metrics.resources_total}\n"
+        )
         f.write(f"    - Tasks: {metrics.tasks_generated}\n")
 ```
 
@@ -152,8 +160,8 @@ print(f"Found {nodes['total']} nodes using apache2 cookbook")
 
 # Analyse node platforms
 platforms = {}
-for node_data in nodes['rows']:
-    platform = node_data.get('platform', 'unknown')
+for node_data in nodes["rows"]:
+    platform = node_data.get("platform", "unknown")
     platforms[platform] = platforms.get(platform, 0) + 1
 
 print("\nPlatform distribution:")
@@ -161,10 +169,10 @@ for platform, count in sorted(platforms.items(), key=lambda x: x[1], reverse=Tru
     print(f"  {platform}: {count} nodes")
 
 # Determine optimal target platform based on node count
-if nodes['total'] > 100:
+if nodes["total"] > 100:
     target_platform = "aap"  # Large scale → AAP
     target_version = "2.4.0"
-elif nodes['total'] > 20:
+elif nodes["total"] > 20:
     target_platform = "awx"  # Medium scale → AWX
     target_version = "24.6.1"
 else:
@@ -249,6 +257,7 @@ with open(output_dir / "all.yml", "w") as f:
     f.write("# Migrated from Chef data bags\n")
     f.write("---\n")
     import yaml
+
     yaml.dump(ansible_vars, f, default_flow_style=False)
 
 print(f"Exported data bags to {output_dir / 'all.yml'}")
@@ -286,6 +295,7 @@ from souschef.migration_v2 import MigrationOrchestrator, MigrationStatus
 from datetime import datetime
 import json
 
+
 class IncrementalMigrationManager:
     """Manage incremental cookbook migrations."""
 
@@ -319,12 +329,14 @@ class IncrementalMigrationManager:
     def register_cookbook(self, name, path, dependencies=None):
         """Register a cookbook for migration."""
         if name not in self.state["migrated"] and name not in self.state["pending"]:
-            self.state["pending"].append({
-                "name": name,
-                "path": path,
-                "dependencies": dependencies or [],
-                "registered_at": datetime.utcnow().isoformat(),
-            })
+            self.state["pending"].append(
+                {
+                    "name": name,
+                    "path": path,
+                    "dependencies": dependencies or [],
+                    "registered_at": datetime.utcnow().isoformat(),
+                }
+            )
             self._save_state()
             print(f"Registered {name} for migration")
 
@@ -337,8 +349,7 @@ class IncrementalMigrationManager:
         # Find cookbook with satisfied dependencies
         for i, cookbook in enumerate(self.state["pending"]):
             deps_satisfied = all(
-                dep in self.state["migrated"]
-                for dep in cookbook["dependencies"]
+                dep in self.state["migrated"] for dep in cookbook["dependencies"]
             )
 
             if deps_satisfied:
@@ -363,7 +374,10 @@ class IncrementalMigrationManager:
                     migration_id = self.orchestrator.save_state(result)
 
                     # Update state based on result
-                    if result.status in [MigrationStatus.SUCCESS, MigrationStatus.PARTIAL_SUCCESS]:
+                    if result.status in [
+                        MigrationStatus.SUCCESS,
+                        MigrationStatus.PARTIAL_SUCCESS,
+                    ]:
                         del self.state["in_progress"][name]
                         self.state["migrated"][name] = {
                             **cookbook,
@@ -401,9 +415,9 @@ class IncrementalMigrationManager:
 
     def status(self):
         """Print migration status."""
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("INCREMENTAL MIGRATION STATUS")
-        print("="*60)
+        print("=" * 60)
         print(f"Migrated: {len(self.state['migrated'])}")
         print(f"In Progress: {len(self.state['in_progress'])}")
         print(f"Pending: {len(self.state['pending'])}")
@@ -421,14 +435,19 @@ class IncrementalMigrationManager:
                 for error in data["errors"][:2]:
                     print(f"      {error}")
 
+
 # Usage
 manager = IncrementalMigrationManager()
 
 # Register cookbooks with dependencies
 manager.register_cookbook("base", "/opt/cookbooks/base")
-manager.register_cookbook("webserver", "/opt/cookbooks/webserver", dependencies=["base"])
+manager.register_cookbook(
+    "webserver", "/opt/cookbooks/webserver", dependencies=["base"]
+)
 manager.register_cookbook("database", "/opt/cookbooks/database", dependencies=["base"])
-manager.register_cookbook("app", "/opt/cookbooks/app", dependencies=["webserver", "database"])
+manager.register_cookbook(
+    "app", "/opt/cookbooks/app", dependencies=["webserver", "database"]
+)
 
 # Migrate one at a time
 while manager.state["pending"]:
@@ -607,7 +626,9 @@ if custom_resources_dir.exists():
         # Parse custom resource
         try:
             resource_def = parse_custom_resource(str(resource_file))
-            print(f"    Properties: {', '.join(resource_def.get('properties', {}).keys())}")
+            print(
+                f"    Properties: {', '.join(resource_def.get('properties', {}).keys())}"
+            )
             print(f"    Actions: {', '.join(resource_def.get('actions', []))}")
         except Exception as e:
             print(f"    Error parsing: {e}")
@@ -623,12 +644,16 @@ result = orchestrator.migrate_cookbook(str(cookbook_path))
 
 # 3. Review custom resource conversions
 if result.metrics.custom_resources_converted > 0:
-    print(f"\n[OK] Converted {result.metrics.custom_resources_converted} custom resources")
+    print(
+        f"\n[OK] Converted {result.metrics.custom_resources_converted} custom resources"
+    )
     print("Review generated tasks for correctness")
 
 # 4. Check for manual review items
 if result.metrics.resources_manual_review > 0:
-    print(f"\nWARNING {result.metrics.resources_manual_review} resources need manual review")
+    print(
+        f"\nWARNING {result.metrics.resources_manual_review} resources need manual review"
+    )
     print("These may include complex custom resource logic")
 
     # Export list of tasks needing review

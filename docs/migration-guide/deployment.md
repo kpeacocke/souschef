@@ -516,55 +516,51 @@ end
 """
 AWX dynamic inventory from Chef Server or custom CMDB.
 """
+
 import json
 import sys
 import requests
 
+
 def get_chef_nodes():
     """Query Chef Server for nodes."""
     response = requests.get(
-        'https://chef-server.example.com/nodes',
-        headers={'Authorization': f'Bearer {CHEF_TOKEN}'},
-        verify=False
+        "https://chef-server.example.com/nodes",
+        headers={"Authorization": f"Bearer {CHEF_TOKEN}"},
+        verify=False,
     )
     return response.json()
 
+
 def build_inventory():
     """Build Ansible inventory from Chef data."""
-    inventory = {
-        '_meta': {
-            'hostvars': {}
-        },
-        'all': {
-            'hosts': [],
-            'vars': {}
-        }
-    }
+    inventory = {"_meta": {"hostvars": {}}, "all": {"hosts": [], "vars": {}}}
 
     nodes = get_chef_nodes()
 
     for node in nodes:
-        hostname = node['name']
-        inventory['all']['hosts'].append(hostname)
+        hostname = node["name"]
+        inventory["all"]["hosts"].append(hostname)
 
         # Add to role-based groups
-        for role in node.get('roles', []):
+        for role in node.get("roles", []):
             if role not in inventory:
-                inventory[role] = {'hosts': []}
-            inventory[role]['hosts'].append(hostname)
+                inventory[role] = {"hosts": []}
+            inventory[role]["hosts"].append(hostname)
 
         # Add hostvars
-        inventory['_meta']['hostvars'][hostname] = {
-            'ansible_host': node['ipaddress'],
-            'chef_environment': node['chef_environment'],
-            'platform': node['platform'],
-            'platform_version': node['platform_version']
+        inventory["_meta"]["hostvars"][hostname] = {
+            "ansible_host": node["ipaddress"],
+            "chef_environment": node["chef_environment"],
+            "platform": node["platform"],
+            "platform_version": node["platform_version"],
         }
 
     return inventory
 
-if __name__ == '__main__':
-    if len(sys.argv) == 2 and sys.argv[1] == '--list':
+
+if __name__ == "__main__":
+    if len(sys.argv) == 2 and sys.argv[1] == "--list":
         inventory = build_inventory()
         print(json.dumps(inventory, indent=2))
     else:
