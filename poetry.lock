@@ -153,15 +153,15 @@ yamllint = ">=1.38.0"
 
 [[package]]
 name = "anthropic"
-version = "0.116.0"
+version = "0.120.2"
 description = "The official Python library for the anthropic API"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
 markers = "extra == \"ai\" or extra == \"all\""
 files = [
-    {file = "anthropic-0.116.0-py3-none-any.whl", hash = "sha256:6c0a7698e8d652455da3499978279bb2588c7264d0a35be3666009a4258c8256"},
-    {file = "anthropic-0.116.0.tar.gz", hash = "sha256:5fc248fbb9fe03ef686f8a774f81586bca31a043260aab88b387ea3660f4a396"},
+    {file = "anthropic-0.120.2-py3-none-any.whl", hash = "sha256:0f0bc2b381dc0eb41c8d886b815d79c2041cd2374f83aed36f574b6dc9c579c1"},
+    {file = "anthropic-0.120.2.tar.gz", hash = "sha256:9722efc10c27a30a69f5338ddacdb35bc6a64297a4e4ba729bf83af873d5fb3a"},
 ]
 
 [package.dependencies]
@@ -175,10 +175,11 @@ sniffio = "*"
 typing-extensions = ">=4.14,<5"
 
 [package.extras]
-aiohttp = ["aiohttp", "httpx-aiohttp (>=0.1.9)"]
+aiohttp = ["aiohttp", "httpx-aiohttp (>=0.1.9,<1)"]
 aws = ["boto3 (>=1.28.57)", "botocore (>=1.31.57)"]
 bedrock = ["boto3 (>=1.28.57)", "botocore (>=1.31.57)"]
-mcp = ["mcp (>=1.0) ; python_version >= \"3.10\""]
+google-cloud = ["google-auth[requests] (>=2,<3)"]
+mcp = ["mcp (>=1.0,<3) ; python_version >= \"3.10\""]
 vertex = ["google-auth[requests] (>=2,<3)"]
 webhooks = ["standardwebhooks (>=1.0.1,<2)"]
 
@@ -396,19 +397,19 @@ testing = ["pytest (>=6,!=7.0.0)", "pytest-xdist (>=2)"]
 
 [[package]]
 name = "boto3"
-version = "1.43.46"
+version = "1.43.66"
 description = "The AWS SDK for Python"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
 markers = "extra == \"all\" or extra == \"storage\""
 files = [
-    {file = "boto3-1.43.46-py3-none-any.whl", hash = "sha256:69453e2c1bcb9fd9806527ab99950cacfc2826cb0dce9a3a0414d19270c06c3c"},
-    {file = "boto3-1.43.46.tar.gz", hash = "sha256:66c0d943b049a46a492ec4ec2ebe73c930b1842c7137bee83aad6d93e95d4d96"},
+    {file = "boto3-1.43.66-py3-none-any.whl", hash = "sha256:8d097a41e2f545c25252105570f782bb035b1ac13d6213c772d1c895dc7cedeb"},
+    {file = "boto3-1.43.66.tar.gz", hash = "sha256:ffc77129a4e5519bdbd9b278e4fe9e6276c9d951e0d2b60d626977bdb957cb38"},
 ]
 
 [package.dependencies]
-botocore = ">=1.43.46,<1.44.0"
+botocore = ">=1.43.66,<1.44.0"
 jmespath = ">=0.7.1,<2.0.0"
 s3transfer = ">=0.19.0,<0.20.0"
 
@@ -417,15 +418,15 @@ crt = ["botocore[crt] (>=1.21.0,<2.0a0)"]
 
 [[package]]
 name = "botocore"
-version = "1.43.46"
+version = "1.43.67"
 description = "Low-level, data-driven core of boto 3."
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
 markers = "extra == \"all\" or extra == \"storage\""
 files = [
-    {file = "botocore-1.43.46-py3-none-any.whl", hash = "sha256:cb673891e623ae6e6a1bf24d94ef169504f3eb02584adb5d5bee2f6aae819b60"},
-    {file = "botocore-1.43.46.tar.gz", hash = "sha256:59f2e1ac3cdc66d191cae91c0804bc41847ce817dc8147cf43eaada8f76a5533"},
+    {file = "botocore-1.43.67-py3-none-any.whl", hash = "sha256:48ab8e9fac26fbc2a700d57010251003e6a5f731cf74d8540fb796bc8f3fc0ef"},
+    {file = "botocore-1.43.67.tar.gz", hash = "sha256:6fe5cfa0c8676ba809efe505b618ec00f30d1af2d014bf316a7aa4ee86accb20"},
 ]
 
 [package.dependencies]
@@ -434,7 +435,7 @@ python-dateutil = ">=2.1,<3.0.0"
 urllib3 = ">=1.25.4,<2.2.0 || >2.2.0,<3"
 
 [package.extras]
-crt = ["awscrt (==0.32.2)"]
+crt = ["awscrt (==0.36.0)"]
 
 [[package]]
 name = "bracex"
@@ -469,19 +470,6 @@ requests = ">=2.16.0"
 dev = ["cachecontrol[filecache,redis]", "cheroot (>=11.1.2)", "cherrypy", "codespell", "furo", "mypy", "pytest", "pytest-cov", "ruff", "sphinx", "sphinx-copybutton", "types-redis", "types-requests"]
 filecache = ["filelock (>=3.8.0)"]
 redis = ["redis (>=2.10.5)"]
-
-[[package]]
-name = "cachetools"
-version = "6.2.6"
-description = "Extensible memoizing collections and decorators"
-optional = true
-python-versions = ">=3.9"
-groups = ["main"]
-markers = "extra == \"all\" or extra == \"ui\""
-files = [
-    {file = "cachetools-6.2.6-py3-none-any.whl", hash = "sha256:8c9717235b3c651603fff0076db52d6acbfd1b338b8ed50256092f7ce9c85bda"},
-    {file = "cachetools-6.2.6.tar.gz", hash = "sha256:16c33e1f276b9a9c0b49ab5782d901e3ad3de0dd6da9bf9bcd29ac5672f2f9e6"},
-]
 
 [[package]]
 name = "certifi"
@@ -1398,12 +1386,11 @@ version = "4.0.12"
 description = "Git Object Database"
 optional = false
 python-versions = ">=3.7"
-groups = ["main", "dev"]
+groups = ["dev"]
 files = [
     {file = "gitdb-4.0.12-py3-none-any.whl", hash = "sha256:67073e15955400952c6565cc3e707c554a4eea2e428946f7a4c162fab9bd9bcf"},
     {file = "gitdb-4.0.12.tar.gz", hash = "sha256:5ef71f855d191a3326fcfbc0d5da835f26b13fbcba60c32c21091c349ffdb571"},
 ]
-markers = {main = "extra == \"all\" or extra == \"ui\""}
 
 [package.dependencies]
 smmap = ">=3.0.1,<6"
@@ -1414,12 +1401,11 @@ version = "3.1.57"
 description = "GitPython is a Python library used to interact with Git repositories"
 optional = false
 python-versions = ">=3.7"
-groups = ["main", "dev"]
+groups = ["dev"]
 files = [
     {file = "gitpython-3.1.57-py3-none-any.whl", hash = "sha256:4ccf7d73c10f5c9e76043fbb2675ac5a1b3ff5b41e648f56bcbed5f63792ecaf"},
     {file = "gitpython-3.1.57.tar.gz", hash = "sha256:c493ec57c0ef6b19743798b6a5af859c71814b524e7e6f97baa2f8e658961488"},
 ]
-markers = {main = "extra == \"all\" or extra == \"ui\""}
 
 [package.dependencies]
 gitdb = ">=4.0.1,<5"
@@ -3416,15 +3402,15 @@ markers = {main = "python_version >= \"3.11\" and (extra == \"all\" or extra == 
 
 [[package]]
 name = "openai"
-version = "2.45.0"
+version = "2.53.0"
 description = "The official Python library for the openai API"
 optional = true
-python-versions = ">=3.9"
+python-versions = ">=3.10"
 groups = ["main"]
 markers = "extra == \"ai\" or extra == \"all\""
 files = [
-    {file = "openai-2.45.0-py3-none-any.whl", hash = "sha256:5df105f5f8c9b711fcb9d06d2d3888cebc82506db216484c14a4e53cdf651777"},
-    {file = "openai-2.45.0.tar.gz", hash = "sha256:10d34ca9c5643bce775852fddbfc172505cb1d4de1ccd101696c3ecff358765d"},
+    {file = "openai-2.53.0-py3-none-any.whl", hash = "sha256:c694ffc747a3c4d1663ef2b07b811315a476164ee5efa3a993967349ebca7618"},
+    {file = "openai-2.53.0.tar.gz", hash = "sha256:baf5802ad08980e1d9d561e1b996e800c8bcd14af5847c6d0e7a5cc59e4d4116"},
 ]
 
 [package.dependencies]
@@ -3438,9 +3424,10 @@ tqdm = ">4"
 typing-extensions = ">=4.14,<5"
 
 [package.extras]
-aiohttp = ["aiohttp", "httpx-aiohttp (>=0.1.9)"]
-bedrock = ["botocore (>=1.40.0,<1.43) ; python_version < \"3.10\"", "botocore (>=1.40.0,<2) ; python_version >= \"3.10\""]
+aiohttp = ["aiohttp (>=3.14.1)", "httpx-aiohttp (>=0.1.9)"]
+bedrock = ["botocore (>=1.40.0,<2)"]
 datalib = ["numpy (>=1)", "pandas (>=1.2.3)", "pandas-stubs (>=1.1.0.11)"]
+httpx2 = ["anyio (>=4.10.0,<5)", "httpx (>=0.25.1,<1)", "httpx2 (>=2.7.0,<3)"]
 realtime = ["websockets (>=13,<16)"]
 voice-helpers = ["numpy (>=2.0.2)", "sounddevice (>=0.5.1)"]
 
@@ -3464,14 +3451,14 @@ test = ["pytest"]
 
 [[package]]
 name = "packaging"
-version = "26.2"
+version = "26.3"
 description = "Core utilities for Python packages"
 optional = false
-python-versions = ">=3.8"
+python-versions = ">=3.9"
 groups = ["main", "dev"]
 files = [
-    {file = "packaging-26.2-py3-none-any.whl", hash = "sha256:5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e"},
-    {file = "packaging-26.2.tar.gz", hash = "sha256:ff452ff5a3e828ce110190feff1178bb1f2ea2281fa2075aadb987c2fb221661"},
+    {file = "packaging-26.3-py3-none-any.whl", hash = "sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c"},
+    {file = "packaging-26.3.tar.gz", hash = "sha256:94edc256424af38762eb31306eed28beb9f0efc50a8837492c9d6fd6004aed79"},
 ]
 
 [[package]]
@@ -5367,12 +5354,11 @@ version = "5.0.2"
 description = "A pure Python implementation of a sliding window memory map manager"
 optional = false
 python-versions = ">=3.7"
-groups = ["main", "dev"]
+groups = ["dev"]
 files = [
     {file = "smmap-5.0.2-py3-none-any.whl", hash = "sha256:b30115f0def7d7531d22a0fb6502488d879e75b260a9db4d0819cfb25403af5e"},
     {file = "smmap-5.0.2.tar.gz", hash = "sha256:26ea65a03958fa0c8a1c7e8c7a58fdc77221b8910f6be2131affade476898ad5"},
 ]
-markers = {main = "extra == \"all\" or extra == \"ui\""}
 
 [[package]]
 name = "sniffio"
@@ -5442,42 +5428,40 @@ full = ["httpx (>=0.27.0,<0.29.0)", "httpx2 (>=2.0.0)", "itsdangerous", "jinja2"
 
 [[package]]
 name = "streamlit"
-version = "1.59.2"
+version = "1.61.1"
 description = "A faster way to build and share data apps"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
 markers = "extra == \"all\" or extra == \"ui\""
 files = [
-    {file = "streamlit-1.59.2-py3-none-any.whl", hash = "sha256:5014cb4f0064bd16c58fe334cb0d3c4b7e2be3d1ce4c02202c07114a33576dab"},
-    {file = "streamlit-1.59.2.tar.gz", hash = "sha256:8fcb35df152868d33eec7ad2d89e276499a5351fb861eb1752b76476be7eb582"},
+    {file = "streamlit-1.61.1-py3-none-any.whl", hash = "sha256:3f0ebf6764c3f938f8107414c9533942fa85a84b57affdaa7727d562210d8ece"},
+    {file = "streamlit-1.61.1.tar.gz", hash = "sha256:68acf1ff1b6005b19205c2777d832deea0c1edd6fbbf7f43f091b96220e5e35f"},
 ]
 
 [package.dependencies]
-altair = ">=4.0,<5.4.0 || >5.4.0,<5.4.1 || >5.4.1,<7"
-anyio = ">=4.0.0"
+altair = ">=5.0.0,<5.4.0 || >5.4.0,<5.4.1 || >5.4.1,<7"
+anyio = ">=4.0.0,<5"
 blinker = ">=1.5.0,<2"
-cachetools = ">=5.5,<8"
 click = ">=7.0,<9"
-gitpython = ">=3.0.7,<3.1.19 || >3.1.19,<4"
-httptools = ">=0.6.3"
-itsdangerous = ">=2.1.2"
+httptools = ">=0.6.3,<1"
+itsdangerous = ">=2.1.2,<3"
 numpy = ">=1.23,<3"
 packaging = ">=20"
 pandas = ">=1.4.0,<4"
 pillow = ">=7.1.0,<13"
-protobuf = ">=3.20,<8"
+protobuf = ">=5.26.1,<8"
 pyarrow = ">=7.0,<25"
 pydeck = ">=0.8.0b4,<1"
-python-multipart = ">=0.0.10"
+python-multipart = ">=0.0.10,<1"
 requests = ">=2.27,<3"
-starlette = ">=0.40.0"
+starlette = ">=0.46.0,<1.4.0"
 tenacity = ">=8.1.0,<10"
 toml = ">=0.10.1,<2"
 typing-extensions = ">=4.10.0,<5"
-uvicorn = ">=0.30.0"
+uvicorn = ">=0.30.0,<1"
 watchdog = {version = ">=2.1.5,<7", markers = "platform_system != \"Darwin\""}
-websockets = ">=12.0.0"
+websockets = ">=12.0.0,<17"
 
 [package.extras]
 all = ["rich (>=11.0.0)", "streamlit[auth,charts,pdf,performance,snowflake,sql]"]
