@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from mcp import FastMCP
+from mcp.server.fastmcp import FastMCP
 
 from souschef.ansible_upgrade import UpgradePath, UpgradePlan
 from souschef.api_clients import ChefServerClient

@@ -33,7 +33,7 @@ if __name__ == "__main__":
 ### Tool Registration Pattern
 
 ```python
-from mcp import FastMCP
+from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("SousChef")
 
@@ -122,4 +122,3 @@ See the test suite for examples of testing MCP tools:
 - **[Converters API](converters.md)** - Chef-to-Ansible converters
 - **[MCP Tools Reference](../user-guide/mcp-tools.md)** - User-facing tool documentation
 - **[FastMCP Documentation](https://github.com/jlowin/fastmcp)** - MCP framework
-
