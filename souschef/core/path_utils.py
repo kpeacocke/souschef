@@ -85,9 +85,6 @@ def _validate_containment(
     if resolved_within and (name_within or not syntactic_child):
         return True
 
-    if path_obj is not None and path_obj.is_symlink():
-        return True
-
     msg = f"Path traversal attempt: escapes {safe_base}"
     raise ValueError(msg)
 

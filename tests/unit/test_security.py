@@ -73,16 +73,7 @@ class TestPathContainmentSecurity:
             _ensure_within_base_path(attack_path, base)
 
     def test_ensure_within_base_path_symlink_escape(self, tmp_path: Path) -> None:
-        """
-        Test that symlinks within base pass the normpath containment check.
-
-        Note: ``_ensure_within_base_path`` uses ``normpath`` (no symlink
-        resolution) to avoid filesystem I/O on user-controlled data
-        (CodeQL ``py/path-injection``).  A symlink whose *name* lies within
-        ``base_path`` will therefore pass this check regardless of where its
-        target points.  Callers that need symlink safety should call
-        ``_check_symlink_safety`` separately.
-        """
+        """Test that symlinks within base cannot escape containment checks."""
         base = tmp_path / "workspace"
         base.mkdir()
         outside = tmp_path / "outside"
@@ -94,10 +85,8 @@ class TestPathContainmentSecurity:
         symlink = base / "link_to_outside"
         symlink.symlink_to(outside_file)
 
-        # normpath-based check: the symlink name is within base, so it passes.
-        # The caller is responsible for calling _check_symlink_safety separately.
-        result = _ensure_within_base_path(symlink, base)
-        assert result == symlink
+        with pytest.raises(ValueError, match="Path traversal attempt"):
+            _ensure_within_base_path(symlink, base)
 
     def test_ensure_within_base_path_relative_paths(self, tmp_path):
         """Test that relative paths are resolved correctly."""
