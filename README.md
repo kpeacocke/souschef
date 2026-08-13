@@ -65,6 +65,7 @@ cp config/claude-desktop.json ~/Library/Application\ Support/Claude/claude_deskt
 ### Common Use Cases
 
 **Chef Migration:**
+
 - Convert cookbooks to Ansible playbooks and roles
 - Migrate Chef Habitat apps to Docker containers
 - Transform data bags to Ansible Vault
@@ -73,6 +74,7 @@ cp config/claude-desktop.json ~/Library/Application\ Support/Claude/claude_deskt
 - Fetch cookbooks from Chef Server with run_list or policy selection
 
 **SaltStack Migration:**
+
 - Parse SLS state files and extract states, pillars, and grain references
 - Convert Salt states to Ansible playbooks and role task files
 - Migrate pillar data to Ansible `group_vars/` and Ansible Vault
@@ -81,6 +83,7 @@ cp config/claude-desktop.json ~/Library/Application\ Support/Claude/claude_deskt
 - Assess migration complexity and generate phased migration plans
 
 **Puppet Migration:**
+
 - Convert Puppet manifests (`.pp`) and module directories to Ansible playbooks
 - Recognise 14 Puppet resource types; map 10 to idiomatic `ansible.builtin` modules (`package`, `service`, `file`, `user`, `group`, `exec`, `cron`, `host`, `mount`, `ssh_authorized_key`)
 - Warn about unsupported constructs (Hiera lookups, exported resources, `create_resources`) with manual-review guidance
@@ -88,6 +91,7 @@ cp config/claude-desktop.json ~/Library/Application\ Support/Claude/claude_deskt
 - Convert individual Puppet resource declarations to standalone Ansible tasks
 
 **PowerShell Migration:**
+
 - Convert Windows PowerShell provisioning scripts to idiomatic Ansible playbooks
 - Generate full Ansible roles with WinRM inventory and `group_vars`
 - Map 28+ PowerShell patterns to `ansible.windows.*`, `community.windows.*`, `chocolatey.chocolatey.*`
@@ -96,6 +100,7 @@ cp config/claude-desktop.json ~/Library/Application\ Support/Claude/claude_deskt
 - Create complete `requirements.yml` for required Windows collections
 
 **Bash Script Migration:**
+
 - Convert provisioning Bash scripts to idiomatic Ansible playbooks
 - Generate full Ansible roles from Bash scripts (tasks, handlers, defaults, meta)
 - Detect and flag hardcoded secrets with ansible-vault guidance
@@ -104,6 +109,7 @@ cp config/claude-desktop.json ~/Library/Application\ Support/Claude/claude_deskt
 - Score migration quality (A–F) with ranked improvement suggestions
 
 **Ansible Upgrades:**
+
 - Assess Python and Ansible version compatibility
 - Plan upgrades with breaking change analysis
 - Validate collection compatibility
@@ -111,6 +117,7 @@ cp config/claude-desktop.json ~/Library/Application\ Support/Claude/claude_deskt
 - Track end-of-life dates
 
 **Both Infrastructure & Applications:**
+
 - Infrastructure provisioning and configuration
 - Application deployment automation
 - Day-2 operations (backups, scaling, updates)
@@ -165,65 +172,65 @@ curl -s http://127.0.0.1:8081/api/v1/operations
 
 # Analyse migration complexity (dedicated endpoint)
 curl -s -X POST http://127.0.0.1:8081/api/v1/migration/analyse \
-	-H "Content-Type: application/json" \
-	-d '{
-		"cookbook_paths": ["/workspaces/souschef/tests/integration/fixtures/sample_cookbook"],
-		"migration_scope": "full",
-		"target_platform": "ansible_awx"
-	}'
+ -H "Content-Type: application/json" \
+ -d '{
+  "cookbook_paths": ["/workspaces/souschef/tests/integration/fixtures/sample_cookbook"],
+  "migration_scope": "full",
+  "target_platform": "ansible_awx"
+ }'
 
 # Generate playbook from a recipe (dedicated endpoint)
 curl -s -X POST http://127.0.0.1:8081/api/v1/migration/generate-playbook \
-	-H "Content-Type: application/json" \
-	-d '{
-		"recipe_path": "/workspaces/souschef/tests/integration/fixtures/sample_cookbook/recipes/default.rb",
-		"cookbook_path": "/workspaces/souschef/tests/integration/fixtures/sample_cookbook"
-	}'
+ -H "Content-Type: application/json" \
+ -d '{
+  "recipe_path": "/workspaces/souschef/tests/integration/fixtures/sample_cookbook/recipes/default.rb",
+  "cookbook_path": "/workspaces/souschef/tests/integration/fixtures/sample_cookbook"
+ }'
 
 # Generate migration plan (dedicated endpoint)
 curl -s -X POST http://127.0.0.1:8081/api/v1/migration/plan \
-	-H "Content-Type: application/json" \
-	-d '{
-		"cookbook_paths": ["/workspaces/souschef/tests/integration/fixtures/sample_cookbook"],
-		"migration_strategy": "phased",
-		"timeline_weeks": 12
-	}'
+ -H "Content-Type: application/json" \
+ -d '{
+  "cookbook_paths": ["/workspaces/souschef/tests/integration/fixtures/sample_cookbook"],
+  "migration_strategy": "phased",
+  "timeline_weeks": 12
+ }'
 
 # Validate conversion output with profile-based filtering
 curl -s -X POST http://127.0.0.1:8081/api/v1/validation/profile \
-	-H "Content-Type: application/json" \
-	-d '{
-		"conversion_type": "recipe",
-		"result_content": "- hosts: all\n  tasks: []",
-		"validation_profile": "moderate"
-	}'
+ -H "Content-Type: application/json" \
+ -d '{
+  "conversion_type": "recipe",
+  "result_content": "- hosts: all\n  tasks: []",
+  "validation_profile": "moderate"
+ }'
 
 # Query migration capability context (keyword, vector, or hybrid retrieval)
 curl -s -X POST http://127.0.0.1:8081/api/v1/context/query \
-	-H "Content-Type: application/json" \
-	-d '{
-		"query": "migration plan timeline",
-		"top_k": 5,
-		"cookbook_path": "/workspaces/souschef/tests/integration/fixtures/sample_cookbook",
-		"retrieval_mode": "hybrid"
-	}'
+ -H "Content-Type: application/json" \
+ -d '{
+  "query": "migration plan timeline",
+  "top_k": 5,
+  "cookbook_path": "/workspaces/souschef/tests/integration/fixtures/sample_cookbook",
+  "retrieval_mode": "hybrid"
+ }'
 
 # Stream context matches as server-sent events
 curl -N -X POST http://127.0.0.1:8081/api/v1/context/query/stream \
-	-H "Content-Type: application/json" \
-	-d '{
-		"query": "migration plan timeline",
-		"top_k": 3
-	}'
+ -H "Content-Type: application/json" \
+ -d '{
+  "query": "migration plan timeline",
+  "top_k": 3
+ }'
 
 # Stream validation profile results as server-sent events
 curl -N -X POST http://127.0.0.1:8081/api/v1/validation/profile/stream \
-	-H "Content-Type: application/json" \
-	-d '{
-		"conversion_type": "recipe",
-		"result_content": "- hosts: all\n  tasks: []",
-		"validation_profile": "safety"
-	}'
+ -H "Content-Type: application/json" \
+ -d '{
+  "conversion_type": "recipe",
+  "result_content": "- hosts: all\n  tasks: []",
+  "validation_profile": "safety"
+ }'
 ```
 
 Request guardrails: per-route payload limits return `413`, and operation timeouts return `408`.
