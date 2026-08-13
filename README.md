@@ -1,11 +1,5 @@
 # SousChef: Multi-Platform to Ansible Migration + Ansible Upgrade Planning
 
-## Project Status
-
-SousChef is now in maintenance mode. I am not adding new features, but I will continue to patch bugs and maintain security issues.
-
-For more active and full-featured development, please head over to the x2ansible guys at https://github.com/x2ansible.
-
 Transform Chef, SaltStack, Puppet, PowerShell, and Bash automation to Ansible, and plan Ansible version upgrades. Works with any AI assistant via MCP (Model Context Protocol)—Claude, GPT-4, GitHub Copilot, Red Hat AI, local models, and more.
 
 **Quick Facts:** MIT License | Python 3.10+ | 95 MCP Tools | 91% Test Coverage
