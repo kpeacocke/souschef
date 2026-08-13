@@ -19,7 +19,7 @@ ENV PYTHONUNBUFFERED=1 \
 # Install runtime libraries only (not -dev packages)
 RUN apk add --no-cache \
     ca-certificates \
-    curl \
+    curl=8.14.1-r3 \
     libffi \
     && apk upgrade --no-cache \
     && addgroup -g 1001 -S app \
