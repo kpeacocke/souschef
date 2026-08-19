@@ -30,6 +30,10 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    ignore:
+      - dependency-name: "mcp"
+        update-types:
+          - "version-update:semver-major"
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
@@ -48,6 +52,10 @@ updates:
     commit-message:
       prefix: "ci"
       include: "scope"
+    groups:
+      codeql-actions:
+        patterns:
+          - "github/codeql-action/*"
 
   # Go dependencies (terraform-provider)
   - package-ecosystem: "gomod"

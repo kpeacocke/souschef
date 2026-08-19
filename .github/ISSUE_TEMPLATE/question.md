@@ -2,7 +2,7 @@
 name: Question / Help
 about: Ask a question or get help using SousChef
 title: '[QUESTION] '
-labels: ['question', 'help-wanted']
+labels: ['question', 'help wanted']
 assignees: ''
 
 ---
