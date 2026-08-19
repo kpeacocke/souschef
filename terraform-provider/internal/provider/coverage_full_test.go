@@ -173,6 +173,21 @@ func TestAssessmentDataSourceRead(t *testing.T) {
 	}
 }
 
+func TestAssessmentDataSourceReadIgnoresStderrWarnings(t *testing.T) {
+	ds := &assessmentDataSource{client: &SousChefClient{Path: newFakeSousChef(t)}}
+	schema := newDataSourceSchema(t, ds)
+	t.Setenv("SOUSCHEF_TEST_STDERR_WARNING", "1")
+
+	config := newDataSourceConfig(t, schema, assessmentDataSourceModel{CookbookPath: types.StringValue(testTmpCookbook)})
+	resp := &datasource.ReadResponse{State: tfsdk.State{Schema: schema}}
+
+	ds.Read(context.Background(), datasource.ReadRequest{Config: config}, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
+	}
+}
+
 func TestAssessmentDataSourceReadErrors(t *testing.T) {
 	ds := &assessmentDataSource{client: &SousChefClient{Path: newFakeSousChef(t)}}
 	schema := newDataSourceSchema(t, ds)

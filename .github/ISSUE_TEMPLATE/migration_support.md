@@ -2,7 +2,7 @@
 name: Migration Support Request
 about: Get help with a specific Chef-to-Ansible migration project
 title: '[MIGRATION] '
-labels: ['migration-support', 'help-wanted']
+labels: ['area/migration', 'help wanted']
 assignees: ''
 
 ---

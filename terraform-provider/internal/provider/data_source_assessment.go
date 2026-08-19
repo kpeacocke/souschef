@@ -2,6 +2,7 @@
 package provider
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -121,11 +122,13 @@ func (d *assessmentDataSource) Read(ctx context.Context, req datasource.ReadRequ
 		"command": cmd.String(),
 	})
 
-	output, err := cmd.CombinedOutput()
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	output, err := cmd.Output()
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error assessing cookbook",
-			fmt.Sprintf("Could not assess cookbook: %s\n%s", err, string(output)),
+			fmt.Sprintf("Could not assess cookbook: %s\n%s", err, stderr.String()),
 		)
 		return
 	}

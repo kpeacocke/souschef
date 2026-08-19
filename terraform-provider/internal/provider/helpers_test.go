@@ -118,6 +118,9 @@ const fakeSousChefScript = "#!/bin/sh\n" +
 	scriptForcedError +
 	scriptExitFailure +
 	scriptIfEnd +
+	"    if [ \"$SOUSCHEF_TEST_STDERR_WARNING\" = \"1\" ]; then\n" +
+	"      echo \"/tmp/souschef: runtime warning\" >&2\n" +
+	scriptIfEnd +
 	"    if [ \"$SOUSCHEF_TEST_BAD_JSON\" = \"1\" ]; then\n" +
 	"      echo \"{bad json\"\n" +
 	scriptExitSuccess +
