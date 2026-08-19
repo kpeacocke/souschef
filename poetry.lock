@@ -112,15 +112,15 @@ yamllint = ">=1.38.0"
 
 [[package]]
 name = "anthropic"
-version = "0.121.0"
+version = "0.122.0"
 description = "The official Python library for the anthropic API"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
 markers = "extra == \"ai\" or extra == \"all\""
 files = [
-    {file = "anthropic-0.121.0-py3-none-any.whl", hash = "sha256:6048713fa441e59e1cba8363171cd2a86273b25bd213e9c7ac70a523af88b011"},
-    {file = "anthropic-0.121.0.tar.gz", hash = "sha256:e79d6e08ab3376602fc9a70d4d5ea3540817c76cf7e16658bed790834e1833d6"},
+    {file = "anthropic-0.122.0-py3-none-any.whl", hash = "sha256:45ec906452ffae6b5f7f0c53d01f50bfb7e4ce878d7ae8e4309d13171e557e67"},
+    {file = "anthropic-0.122.0.tar.gz", hash = "sha256:ffec56ae96657c8d19fa575ec96f140f380c353a07ab7d61b92eb18ee6536601"},
 ]
 
 [package.dependencies]
@@ -378,19 +378,19 @@ testing = ["pytest (>=6,!=7.0.0)", "pytest-xdist (>=2)"]
 
 [[package]]
 name = "boto3"
-version = "1.43.70"
+version = "1.43.72"
 description = "The AWS SDK for Python"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
 markers = "extra == \"all\" or extra == \"storage\""
 files = [
-    {file = "boto3-1.43.70-py3-none-any.whl", hash = "sha256:b9399cce51bec9552e61a6b85015c42dea68752e79c00a7005d84eaf7ee15fef"},
-    {file = "boto3-1.43.70.tar.gz", hash = "sha256:4f1e16b9eebbad3f312bb6fbf7685d40abdd52a691485cb9f09e7df60d912b41"},
+    {file = "boto3-1.43.72-py3-none-any.whl", hash = "sha256:f1bbbad5ed8d8a8c64edb0cd092dc443c95a85623b2ac88b6f6d633717605f00"},
+    {file = "boto3-1.43.72.tar.gz", hash = "sha256:6280ce03cc85e9110fd9fb7e2fbf11eae0b1177cb041a0d69aa88edc9d178cf9"},
 ]
 
 [package.dependencies]
-botocore = ">=1.43.70,<1.44.0"
+botocore = ">=1.43.72,<1.44.0"
 jmespath = ">=0.7.1,<2.0.0"
 s3transfer = ">=0.19.0,<0.20.0"
 
@@ -399,15 +399,15 @@ crt = ["botocore[crt] (>=1.21.0,<2.0a0)"]
 
 [[package]]
 name = "botocore"
-version = "1.43.70"
+version = "1.43.74"
 description = "Low-level, data-driven core of boto 3."
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
 markers = "extra == \"all\" or extra == \"storage\""
 files = [
-    {file = "botocore-1.43.70-py3-none-any.whl", hash = "sha256:95bc23a6472f8876349ae334b526e66006f6cf3c87bf39d3e9f057dc8c2eb85f"},
-    {file = "botocore-1.43.70.tar.gz", hash = "sha256:a7bebdd0b1c8265e72759a4f7f61e9e43d57968b2c2a5e1e7b350d0a1e3ce81c"},
+    {file = "botocore-1.43.74-py3-none-any.whl", hash = "sha256:5793d9170b2b9f3194fb6f667feed8986eb81f767528d52ceaf45df2242d56e9"},
+    {file = "botocore-1.43.74.tar.gz", hash = "sha256:b127b24d49532b5d7b0851b4abb3d3b99f58a121f87f07c23dac7c4d88b25c72"},
 ]
 
 [package.dependencies]
@@ -1597,7 +1597,7 @@ description = "httpx2 transports for Emscripten/Pyodide, backed by the JavaScrip
 optional = true
 python-versions = ">=3.12"
 groups = ["main"]
-markers = "python_version >= \"3.12\" and sys_platform == \"emscripten\" and (extra == \"ai\" or extra == \"all\")"
+markers = "python_version >= \"3.12\" and (extra == \"ai\" or extra == \"all\") and sys_platform == \"emscripten\""
 files = [
     {file = "httpx2_jsfetch-1.0-py3-none-any.whl", hash = "sha256:cb916b707601e69a07721aabc8f3f6659be3a6893bc1ff5c6f9e02241df2da32"},
     {file = "httpx2_jsfetch-1.0.tar.gz", hash = "sha256:70a0e3eabfef7cce5ad9c629f7d01ca05e418f586646f4ddf14782e4c1454c60"},
@@ -3373,15 +3373,15 @@ markers = {main = "extra == \"all\" or extra == \"ui\""}
 
 [[package]]
 name = "openai"
-version = "3.0.0"
+version = "3.1.0"
 description = "The official Python library for the openai API"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
 markers = "extra == \"ai\" or extra == \"all\""
 files = [
-    {file = "openai-3.0.0-py3-none-any.whl", hash = "sha256:8d32ac3a6647a66910d6cb8a64f0fa5a6c823604b6e82db83d9d055c6709bd51"},
-    {file = "openai-3.0.0.tar.gz", hash = "sha256:ffd00ef1678d70957e1f1ed98d5bfcf1d661f41ea4482f22e7d0144a66435a49"},
+    {file = "openai-3.1.0-py3-none-any.whl", hash = "sha256:f06d5a5c8d06a0aead3a67d33fe5a3c3c31540a0f7a8017b02ba8cd99bc5c736"},
+    {file = "openai-3.1.0.tar.gz", hash = "sha256:3ae7190da63f718727f9c525740d3f713e85553d2bf1d0cc9247346bd9063a4d"},
 ]
 
 [package.dependencies]
