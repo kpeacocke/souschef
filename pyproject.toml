@@ -23,6 +23,8 @@ python-dotenv = ">=1.2.1"
 pyyaml = ">=6.0.0"
 pydantic = ">=2.0.0"
 requests = ">=2.31.0"
+# Security floor for the requests HTTP transport.
+urllib3 = ">=2.8.0"
 cryptography = ">=43.0.0"
 packaging = ">=23.0"
 # Optional dependencies for different features
@@ -50,6 +52,8 @@ mypy = ">=1.14.0"
 pip-audit = ">=2.7.0"
 twine = ">=6.0.0"
 pre-commit = ">=4.5.1"
+# Security floor for pre-commit virtual environments.
+virtualenv = ">=21.7.13"
 mutmut = ">=3.4.0"
 syrupy = ">=5,<7"
 ansible-lint = ">=25.12.2,<27.0.0"

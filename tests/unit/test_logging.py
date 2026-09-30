@@ -202,6 +202,31 @@ class TestLoggingConfiguration:
         assert logger.level == logging.INFO
         assert len(logger.handlers) > 0
 
+    @pytest.mark.parametrize("json_format", [False, True])
+    def test_console_logging_preserves_protocol_stdout(self, capsys, json_format):
+        """Keep console diagnostics on stderr for MCP stdio clients."""
+        root_logger = logging.getLogger()
+        previous_handlers = root_logger.handlers[:]
+        previous_level = root_logger.level
+        souschef_logger = logging.getLogger("souschef")
+        previous_souschef_level = souschef_logger.level
+        try:
+            configure_logging(json_format=json_format)
+            logging.getLogger("mcp.server.lowlevel.server").info(
+                "Processing request of type ListToolsRequest"
+            )
+            captured = capsys.readouterr()
+            assert captured.out == ""
+            assert "Processing request of type ListToolsRequest" in captured.err
+            if json_format:
+                assert json.loads(captured.err)["level"] == "INFO"
+        finally:
+            for handler in root_logger.handlers:
+                handler.close()
+            root_logger.handlers[:] = previous_handlers
+            root_logger.setLevel(previous_level)
+            souschef_logger.setLevel(previous_souschef_level)
+
     def test_configure_logging_debug_level(self):
         """Test configuring DEBUG level."""
         configure_logging(level="DEBUG")

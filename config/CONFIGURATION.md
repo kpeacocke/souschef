@@ -231,7 +231,12 @@ The provided VS Code configs work with Copilot:
 ```json
 {
   "command": "docker",
-  "args": ["run", "-i", "--rm", "souschef-mcp:latest"]
+  "args": [
+    "run", "-i", "--rm",
+    "--env", "SOUSCHEF_WORKSPACE_ROOT=/workspace",
+    "--mount", "type=bind,source=/absolute/path/to/migration-workspace,target=/workspace",
+    "souschef-mcp:latest"
+  ]
 }
 ```
 
@@ -341,3 +346,38 @@ pwd  # Use this output in your config
 ## Contributing
 
 Found an issue with these configs? Please [open an issue](https://github.com/kpeacocke/souschef/issues) or submit a PR!
+
+## Docker workspace paths
+
+Every Docker client example includes a bind mount and sets
+`SOUSCHEF_WORKSPACE_ROOT=/workspace`. Before using an example, replace
+`/absolute/path/to/migration-workspace` with an existing, dedicated host
+directory containing your automation inputs and generated output. On Windows,
+use an absolute path such as `C:/work/souschef`; the path inside the container
+remains `/workspace`.
+
+Use absolute **container paths** in MCP tool calls, for example
+`parse_recipe(path="/workspace/cookbooks/web/recipes/default.rb")`.
+Paths outside that workspace are rejected. The directory is mounted read-write
+so migration tools can save generated output. On native Linux, ensure the
+image's non-root UID/GID 1001 can read inputs and write output. Docker Desktop
+must be able to share the selected directory.
+
+For the proposed Docker MCP Toolkit catalogue entry, set the
+`souschef.workspace` parameter to that same host directory. The entry is
+being reviewed in [Docker MCP Registry PR #3587](https://github.com/docker/mcp-registry/pull/3587);
+it is not available from the public catalogue until Docker publishes it.
+
+### Verify a locally built MCP image
+
+With Node.js 22+ and Docker available, run:
+
+```bash
+node scripts/verify_docker_mcp.mjs souschef-mcp:latest
+```
+
+The verifier uses a temporary cookbook workspace, performs actual MCP
+initialisation, discovery and tool calls, and checks that paths outside the
+workspace are rejected. The Docker MCP Registry Verification workflow also
+builds the pinned submission, generates a test catalogue, and exercises the
+same calls through Docker MCP Gateway.

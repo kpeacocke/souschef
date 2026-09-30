@@ -1,0 +1,83 @@
+name: Docker MCP Registry Verification
+
+on:
+  push:
+    branches:
+      - fix/docker-mcp-registry-verification
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GOWORK: "off"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out verification script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Check out pinned Docker registry tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: docker/mcp-registry
+          ref: ff1c8b717118220f4946280a53cc5fa9f3d1a641
+          path: registry-tooling
+      - name: Check out proposed SousChef entry
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: kpeacocke/mcp-registry
+          ref: 0d9040ddd7706e9a9cd36dc351067d34cd1581ac
+          path: registry-entry
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: registry-tooling/go.mod
+          cache-dependency-path: registry-tooling/go.sum
+      - name: Overlay proposed entry and check script syntax
+        run: |
+          cp -R registry-entry/servers/souschef registry-tooling/servers/
+          node --check scripts/verify_docker_mcp.mjs
+          git -C registry-tooling rev-parse HEAD
+          git -C registry-entry rev-parse HEAD
+          cat registry-tooling/servers/souschef/server.yaml
+      - name: Validate registry entry
+        working-directory: registry-tooling
+        run: go run ./cmd/validate --name souschef
+      - name: Build exact pinned image and discover tools
+        working-directory: registry-tooling
+        run: go run ./cmd/build --tools souschef
+      - name: Exercise MCP protocol and mounted recipe
+        run: node scripts/verify_docker_mcp.mjs mcp/souschef
+      - name: Generate test catalogue
+        working-directory: registry-tooling
+        run: go run ./cmd/catalog souschef
+      - name: Check out pinned Docker MCP Gateway
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: docker/mcp-gateway
+          ref: a34df45d4ec0e941a9853ad768c4f6cd818966b3
+          path: gateway-source
+      - name: Set up Go for MCP Gateway
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: gateway-source/go.mod
+          cache-dependency-path: gateway-source/go.sum
+      - name: Build local Docker MCP CLI plugin
+        working-directory: gateway-source
+        run: |
+          mkdir -p "$HOME/.docker/cli-plugins"
+          go build -o "$HOME/.docker/cli-plugins/docker-mcp" ./cmd/docker-mcp
+      - name: Install test catalogue and exercise Gateway tool calls
+        run: |
+          mkdir -p "$HOME/.docker/mcp/catalogs"
+          cp ./registry-tooling/catalogs/souschef/catalog.yaml "$HOME/.docker/mcp/catalogs/docker-mcp.yaml"
+          node scripts/verify_docker_mcp.mjs mcp/souschef "$HOME/.docker/mcp/catalogs/docker-mcp.yaml"
+      - name: Preserve generated catalogue
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: souschef-test-catalogue
+          path: registry-tooling/catalogs/souschef/
+          retention-days: 7
