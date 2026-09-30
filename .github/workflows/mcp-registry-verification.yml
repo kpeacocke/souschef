@@ -70,9 +70,10 @@ jobs:
         run: |
           mkdir -p "$HOME/.docker/cli-plugins"
           go build -o "$HOME/.docker/cli-plugins/docker-mcp" ./cmd/docker-mcp
-      - name: Import catalogue and exercise Gateway tool calls
+      - name: Install test catalogue and exercise Gateway tool calls
         run: |
-          docker mcp catalog import ./registry-tooling/catalogs/souschef/catalog.yaml
+          mkdir -p "$HOME/.docker/mcp/catalogs"
+          cp ./registry-tooling/catalogs/souschef/catalog.yaml "$HOME/.docker/mcp/catalogs/docker-mcp.yaml"
           node scripts/verify_docker_mcp.mjs mcp/souschef "$HOME/.docker/mcp/catalogs/docker-mcp.yaml"
       - name: Preserve generated catalogue
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
