@@ -185,8 +185,8 @@ def configure_logging(
     # Remove existing handlers
     root_logger.handlers.clear()
 
-    # Console handler
-    console_handler = logging.StreamHandler(sys.stdout)
+    # Keep stdout reserved for MCP protocol messages and CLI output.
+    console_handler = logging.StreamHandler(sys.stderr)
     console_handler.setLevel(numeric_level)
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
