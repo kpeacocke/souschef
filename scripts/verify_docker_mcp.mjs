@@ -9,6 +9,8 @@ import path from "node:path";
 import { createInterface } from "node:readline";
 
 const image = process.argv[2] ?? "mcp/souschef";
+const gatewayCatalog = process.argv[3];
+const gatewayMode = Boolean(gatewayCatalog);
 const workspace = await mkdtemp(path.join(tmpdir(), "souschef-mcp-"));
 const containerName = `souschef-verify-${randomUUID()}`;
 const recipePath = path.join(workspace, "cookbooks", "web", "recipes", "default.rb");
@@ -18,13 +20,27 @@ await chmod(workspace, 0o755);
 const pending = new Map();
 let requestId = 0;
 let stderr = "";
-const server = spawn("docker", [
+const directArgs = [
   "run", "--rm", "-i", "--init", "--name", containerName,
   "--cap-drop=ALL", "--security-opt=no-new-privileges", "--network=none",
   "--env", "SOUSCHEF_WORKSPACE_ROOT=/workspace",
   "--mount", `type=bind,source=${workspace},target=/workspace`,
   image,
-], { stdio: ["pipe", "pipe", "pipe"] });
+];
+const configPath = path.join(workspace, "gateway-config.yaml");
+const secretsPath = path.join(workspace, "empty.env");
+if (gatewayMode) {
+  await writeFile(configPath, JSON.stringify({ souschef: { workspace } }));
+  await writeFile(secretsPath, "");
+}
+const gatewayArgs = [
+  "mcp", "gateway", "run", "--servers", "souschef",
+  "--catalog", path.resolve(gatewayCatalog ?? "."),
+  "--config", configPath, "--secrets", secretsPath,
+  "--verify-signatures=false", "--watch=false", "--log-calls=false",
+];
+const server = spawn("docker", gatewayMode ? gatewayArgs : directArgs,
+  { stdio: ["pipe", "pipe", "pipe"] });
 server.stderr.setEncoding("utf8");
 server.stderr.on("data", chunk => { stderr = (stderr + chunk).slice(-16000); });
 function rejectPending(error) {
@@ -67,7 +83,9 @@ function textContent(result) {
   return (result.content ?? []).filter(item => item.type === "text")
     .map(item => item.text).join("\n");
 }
+const toolNames = new Map();
 async function call(name, args) {
+  name = toolNames.get(name) ?? name;
   const result = await request("tools/call", { name, arguments: args });
   assert.equal(result.isError ?? false, false, `${name}: ${textContent(result)}`);
   return textContent(result);
@@ -91,7 +109,10 @@ try {
     cursor = page.nextCursor;
   } while (cursor);
   for (const name of ["parse_recipe", "read_file", "convert_resource_to_task"]) {
-    assert.ok(tools.some(tool => tool.name === name), `Missing tool: ${name}`);
+    const matches = tools.filter(tool => tool.name === name ||
+      tool.name.endsWith(`__${name}`) || tool.name.endsWith(`_${name}`));
+    assert.equal(matches.length, 1, `Missing or ambiguous tool: ${name}`);
+    toolNames.set(name, matches[0].name);
   }
   console.log(`PASS: MCP initialise and discovery (${tools.length} tools)`);
 
@@ -121,7 +142,7 @@ try {
 
   for (const attemptedPath of ["/etc/passwd", "/workspace/../etc/passwd"]) {
     const result = await request("tools/call", {
-      name: "read_file", arguments: { path: attemptedPath },
+      name: toolNames.get("read_file"), arguments: { path: attemptedPath },
     });
     const rejected = textContent(result);
     assert.ok(result.isError || /error|escapes|outside|traversal/i.test(rejected),
@@ -129,11 +150,14 @@ try {
     assert.doesNotMatch(rejected, /^root:[^\n]*:/m);
   }
   console.log("PASS: absolute and traversal paths outside /workspace are rejected");
-  console.log("PASS: no credentials or outbound container network required");
+  console.log(gatewayMode ? "PASS: generated catalogue works through Docker MCP Gateway" :
+    "PASS: no credentials or outbound container network required");
 } finally {
   lines.close();
   server.stdin.end();
-  spawnSync("docker", ["rm", "-f", containerName], { stdio: "ignore", timeout: 15000 });
+  if (!gatewayMode) {
+    spawnSync("docker", ["rm", "-f", containerName], { stdio: "ignore", timeout: 15000 });
+  }
   server.kill();
   rejectPending(new Error("Verification finished"));
   await rm(workspace, { recursive: true, force: true });
