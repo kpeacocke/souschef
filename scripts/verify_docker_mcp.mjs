@@ -135,8 +135,8 @@ try {
     resource_type: "package", resource_name: "nginx", action: "install",
   });
   assert.match(converted, /ansible\.builtin\.package/);
-  assert.match(converted, /name:\s*nginx/);
-  assert.match(converted, /state:\s*present/);
+  assert.match(converted, /^\s+name:\s*["\']?nginx["\']?\s*$/m);
+  assert.match(converted, /^\s+state:\s*["\']?present["\']?\s*$/m);
   console.log("PASS: conversion produces ansible.builtin.package, nginx, present");
   console.log(converted);
 
