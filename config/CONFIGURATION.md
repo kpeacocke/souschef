@@ -231,7 +231,12 @@ The provided VS Code configs work with Copilot:
 ```json
 {
   "command": "docker",
-  "args": ["run", "-i", "--rm", "souschef-mcp:latest"]
+  "args": [
+    "run", "-i", "--rm",
+    "--env", "SOUSCHEF_WORKSPACE_ROOT=/workspace",
+    "--mount", "type=bind,source=/absolute/path/to/migration-workspace,target=/workspace",
+    "souschef-mcp:latest"
+  ]
 }
 ```
 
