@@ -60,3 +60,25 @@ jobs:
           name: souschef-test-catalogue
           path: registry-tooling/catalogs/souschef/
           retention-days: 7
+
+  refresh-lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out dependency constraints
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.13"
+      - name: Install Poetry and refresh vulnerable dependencies
+        run: |
+          python -m pip install poetry==2.3.4
+          poetry update urllib3 virtualenv --lock --no-interaction
+          poetry check --lock
+      - name: Preserve refreshed lockfile
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: souschef-refreshed-lock
+          path: poetry.lock
+          retention-days: 1
