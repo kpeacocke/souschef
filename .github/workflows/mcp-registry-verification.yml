@@ -1,0 +1,59 @@
+name: Docker MCP Registry Verification
+
+on:
+  push:
+    branches:
+      - fix/docker-mcp-registry-verification
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out verification script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Check out pinned Docker registry tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: docker/mcp-registry
+          ref: ff1c8b717118220f4946280a53cc5fa9f3d1a641
+          path: registry-tooling
+      - name: Check out proposed SousChef entry
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: kpeacocke/mcp-registry
+          ref: 109c517848861cde63b2abdbe4771ad34f18deae
+          path: registry-entry
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: registry-tooling/go.mod
+          cache-dependency-path: registry-tooling/go.sum
+      - name: Overlay proposed entry and check script syntax
+        run: |
+          cp -R registry-entry/servers/souschef registry-tooling/servers/
+          node --check scripts/verify_docker_mcp.mjs
+          git -C registry-tooling rev-parse HEAD
+          git -C registry-entry rev-parse HEAD
+          cat registry-tooling/servers/souschef/server.yaml
+      - name: Validate registry entry
+        working-directory: registry-tooling
+        run: go run ./cmd/validate --name souschef
+      - name: Build exact pinned image and discover tools
+        working-directory: registry-tooling
+        run: go run ./cmd/build --tools souschef
+      - name: Exercise MCP protocol and mounted recipe
+        run: node scripts/verify_docker_mcp.mjs mcp/souschef
+      - name: Generate test catalogue
+        working-directory: registry-tooling
+        run: go run ./cmd/catalog souschef
+      - name: Preserve generated catalogue
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: souschef-test-catalogue
+          path: registry-tooling/catalogs/souschef/
+          retention-days: 7
