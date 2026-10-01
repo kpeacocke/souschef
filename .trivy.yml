@@ -1,0 +1,27 @@
+timeout: 15m
+cache-dir: .trivy-cache
+
+scan:
+  skip-dirs:
+    - .git
+    - .venv
+    - .mypy_cache
+    - .pytest_cache
+    - htmlcov
+    - test-output
+    - tests
+  skip-files:
+    - "**/*.yml"
+    - "**/*.yaml"
+
+vulnerability:
+  ignore-unfixed: true
+
+severity:
+  - HIGH
+  - CRITICAL
+
+misconfiguration:
+  scanners:
+    - dockerfile
+    - secret
