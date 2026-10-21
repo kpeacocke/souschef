@@ -35,7 +35,8 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A later push may skip analysis through path filters; let branch scans finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   changes:
@@ -141,15 +142,16 @@ jobs:
           output: sarif-results
 
       - name: Upload SARIF as artifact
-        if: always()
+        if: success()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: codeql-sarif-results-${{ matrix.language }}
           path: sarif-results
+          if-no-files-found: error
           retention-days: 30
 
-      - name: Check for critical findings
-        if: always()
+      - name: Report analysis completion
+        if: success()
         run: |
           echo "CodeQL analysis complete. Check Security > Code scanning alerts for results."
           echo "Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

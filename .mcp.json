@@ -1,0 +1,18 @@
+{
+	"mcpServers": {
+		"souschef": {
+			"type": "stdio",
+			"command": "/workspaces/souschef/.venv/bin/python",
+			"args": [
+				"-m",
+				"souschef.server"
+			],
+			"tools": [
+				"*"
+			],
+			"env": {
+				"PYTHONPATH": "/workspaces/souschef"
+			}
+		}
+	}
+}

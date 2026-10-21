@@ -49,6 +49,11 @@ SousChef uses several tools to maintain secure dependencies:
 - **pip-audit**: Automated vulnerability scanning in CI/CD
 - **Dependabot**: Automated dependency updates (GitHub)
 
+CodeQL branch scans finish even when a newer push arrives, because the newer
+run may skip analysis through changed-path filters. Superseded pull-request
+scans are cancelled. SARIF artifacts and completion messages are produced only
+after successful analysis; missing SARIF output then fails artifact upload.
+
 Container builders and release tooling pin pip to **26.2.0** to address
 CVE-2026-13346 (arbitrary file installation via malicious package indexes) and
 CVE-2026-8643 (path traversal via malicious wheel entry point names). Rebuild and
