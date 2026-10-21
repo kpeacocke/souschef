@@ -1,15 +1,12 @@
 # Multi-stage Dockerfile for SousChef UI - Production Ready
 # Optimised for security, robustness, and Docker registry publishing
 
-ARG PYTHON_VERSION=3.13
-ARG POETRY_VERSION=2.3.4
+ARG POETRY_VERSION=2.5.1
 
 # ============================================================================
 # Base Stage - Common configuration for all stages
 # ============================================================================
-FROM python:${PYTHON_VERSION}-alpine3.22 AS base
-
-ARG PYTHON_VERSION
+FROM python:3.13-slim-bookworm@sha256:73aa5faee130c60da030e105ec971ccf57473fbd22ce73bd6fc9ba99a40b838d AS base
 
 # Metadata for Docker registry and CI/CD
 LABEL org.opencontainers.image.title="SousChef" \
@@ -20,7 +17,7 @@ LABEL org.opencontainers.image.title="SousChef" \
       org.opencontainers.image.url="https://github.com/kpeacocke/souschef" \
       org.opencontainers.image.documentation="https://kpeacocke.github.io/souschef/" \
       org.opencontainers.image.source="https://github.com/kpeacocke/souschef" \
-    org.opencontainers.image.base.name="python:${PYTHON_VERSION}-alpine3.22"
+    org.opencontainers.image.base.name="python:3.13-slim-bookworm"
 
 # Set environment variables for Python and Streamlit
 ENV PYTHONUNBUFFERED=1 \
@@ -38,16 +35,8 @@ ENV PYTHONUNBUFFERED=1 \
     STREAMLIT_SERVER_LOGGER_LEVEL=INFO \
     STREAMLIT_SERVER_MAX_UPLOAD_SIZE=200
 
-# Install runtime dependencies only (Alpine)
-RUN apk update && apk add --no-cache \
-    ca-certificates \
-    curl \
-    # Runtime libraries (not -dev packages)
-    libffi \
-    libpq \
-    && apk upgrade --no-cache \
-    && addgroup -g 1001 -S app \
-    && adduser -u 1001 -S app -G app \
+RUN groupadd --gid 1001 app \
+    && useradd --uid 1001 --gid 1001 --no-log-init --no-create-home app \
     && mkdir -p /app \
     && chown -R app:app /app
 
@@ -60,27 +49,18 @@ WORKDIR /app
 FROM base AS builder
 
 ARG POETRY_VERSION
-ARG PYTHON_VERSION
-
-# Install build-time dependencies (not needed in runtime image)
-RUN apk add --no-cache \
-    gcc \
-    git \
-    libffi-dev \
-    musl-dev \
-    postgresql17-dev
 
 # Copy dependency files first (for better layer caching)
 COPY pyproject.toml poetry.lock ./
 
 # Upgrade pip to pick up security fixes (pinned for reproducibility)
-RUN python -m pip install --no-cache-dir --only-binary :all: "pip==26.1.1"
+RUN python -m pip install --no-cache-dir --only-binary :all: "pip==26.2.0" \
+    && python -m pip install --no-cache-dir --only-binary :all: "poetry==$POETRY_VERSION" \
+    && poetry config installer.only-binary :all: \
+    && python -m venv --without-pip /opt/venv
 
-# Install Poetry with pinned version for reproducibility
-RUN pip install --no-cache-dir --only-binary :all: "poetry==$POETRY_VERSION"
-
-# Configure poetry to not create virtual environment (install globally)
-RUN poetry config virtualenvs.create false
+ENV VIRTUAL_ENV=/opt/venv \
+    PATH="/opt/venv/bin:$PATH"
 
 # Install production dependencies with all required extras
 # Use --no-interaction for automated environments
@@ -89,43 +69,20 @@ RUN poetry install \
     --only=main \
     --extras "ui ai storage" \
     --no-interaction \
-    --no-root && \
-    poetry cache clear pypi --all || true
-
-# Copy site-packages to a predictable location for the runtime stage
-# This avoids glob expansion issues in COPY commands
-RUN PYTHON_MAJOR_MINOR=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")') && \
-    cp -r "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" /tmp/runtime-site-packages
+    --no-root
 
 # ============================================================================
 # Runtime Stage - Minimal production image
 # ============================================================================
 FROM base AS production
 
-ARG PYTHON_VERSION
+# Production has application dependencies, not package managers or their vendors.
+RUN python -m pip uninstall --yes pip
 
-# Upgrade pip to pick up security fixes (pinned for reproducibility)
-RUN python -m pip install --no-cache-dir --only-binary :all: "pip==26.1.1"
+COPY --from=builder --chown=root:root /opt/venv /opt/venv
 
-# Copy site-packages from builder (at predictable location, no glob expansion)
-COPY --from=builder --chown=root:root /tmp/runtime-site-packages /tmp/site-packages
-
-# Install to final location
-RUN PYTHON_MAJOR_MINOR=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")') && \
-    rm -rf "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" && \
-    mv /tmp/site-packages "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" && \
-    \
-    # Remove test files and compiled artifacts, but KEEP dist-info (required for package discovery) \
-    find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
-        -type d -name "tests" -exec rm -rf {} + && \
-    find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
-        -maxdepth 1 -type d -name "poetry*" -exec rm -rf {} + && \
-    find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
-        -type d -name "*.egg-info" -exec rm -rf {} + && \
-    find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
-        -maxdepth 1 -type d -name "poetry-*.dist-info" -exec rm -rf {} + && \
-    find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
-        -type f \( -name "*.pyc" -o -name "*.pyo" -o -name "*.dist-info/RECORD" \) -delete
+ENV VIRTUAL_ENV=/opt/venv \
+    PATH="/opt/venv/bin:$PATH"
 
 # Copy application code (keep root-owned for security)
 COPY souschef/ ./souschef/
@@ -146,7 +103,7 @@ RUN mkdir -p /app/.streamlit && \
     chown -R app:app /app/.streamlit /app/.cache /app/.tmp
 
 # Switch to non-root user for security
-USER app
+USER 1001:1001
 
 # Expose Streamlit port
 EXPOSE 9999
@@ -158,7 +115,7 @@ HEALTHCHECK \
     --timeout=10s \
     --start-period=5s \
     --retries=3 \
-    CMD /bin/sh -c "python -m souschef.ui.health_check" || exit 1
+    CMD ["python", "-m", "souschef.ui.health_check"]
 
 # Use ENTRYPOINT for proper signal handling
 # This ensures Ctrl+C and container stop signals work correctly

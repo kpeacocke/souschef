@@ -1,5 +1,26 @@
 version: 2
 updates:
+  # Production Dockerfile tags and digest pins
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5
+    assignees:
+      - "kpeacocke"
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      production-base-images:
+        patterns:
+          - "python"
+
   # Python dependencies via pip
   - package-ecosystem: "pip"
     directory: "/"

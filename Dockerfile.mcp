@@ -1,13 +1,12 @@
 # Dockerfile for SousChef MCP server (stdio)
 # Optimised for lightweight, secure container execution
 
-ARG PYTHON_VERSION=3.13
-ARG POETRY_VERSION=2.3.4
+ARG POETRY_VERSION=2.5.1
 
 # ============================================================================
 # Base Stage - Runtime dependencies only
 # ============================================================================
-FROM python:${PYTHON_VERSION}-alpine3.22 AS base
+FROM python:3.13-alpine3.22@sha256:e81548ac35b07a3bd4805f275107592ef458b1e893c0e04d45aedaa19416cca5 AS base
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -17,6 +16,8 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app
 
 # Install runtime libraries only (not -dev packages)
+# Resolve supported Alpine branch packages on rebuild; see docs/SECURITY.md.
+# hadolint ignore=DL3018
 RUN apk add --no-cache \
     ca-certificates \
     curl \
@@ -32,57 +33,40 @@ WORKDIR /app
 # ============================================================================
 FROM base AS builder
 
-ARG PYTHON_VERSION
 ARG POETRY_VERSION
 
-# Install build-time dependencies
-RUN apk add --no-cache \
-    gcc \
-    libffi-dev \
-    musl-dev
+# Keep build tooling separate from the application environment.
+RUN python -m pip install --no-cache-dir --only-binary :all: "pip==26.2.0" \
+    && python -m pip install --no-cache-dir --only-binary :all: "poetry==${POETRY_VERSION}" \
+    && python -m venv --without-pip /opt/venv
 
-# Install Poetry with the application Python interpreter to avoid system-managed
-# environment conflicts when syncing dependencies.
-RUN python -m pip install --no-cache-dir --only-binary :all: "pip==26.1.1" \
-    && python -m pip install --no-cache-dir --only-binary :all: "poetry==${POETRY_VERSION}"
+ENV VIRTUAL_ENV=/opt/venv \
+    PATH="/opt/venv/bin:$PATH"
 
 # Copy project files required to build wheel
 COPY pyproject.toml poetry.lock README.md ./
 COPY souschef ./souschef
 
-# Install runtime dependencies first, then install the project package without
-# allowing Poetry to prune its own runtime from the global interpreter.
-RUN poetry config virtualenvs.create false \
+# Build only trusted local source; third-party dependencies must provide wheels.
+RUN poetry config installer.only-binary :all: \
     && poetry install --only main --no-interaction --no-ansi --no-root \
-    && python -m pip install --no-cache-dir --no-deps .
-
-# Copy site-packages to predictable location
-RUN PYTHON_MAJOR_MINOR=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")') && \
-    cp -r "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" /tmp/runtime-site-packages
+    && /usr/local/bin/python -m pip wheel --no-deps --no-build-isolation --wheel-dir /tmp/wheels . \
+    && /usr/local/bin/python -m pip --python /opt/venv/bin/python install \
+        --no-cache-dir --no-index --no-deps --only-binary :all: /tmp/wheels/*.whl
 
 # ============================================================================
 # Production Stage - Minimal runtime image
 # ============================================================================
 FROM base AS production
 
-ARG PYTHON_VERSION
+# Production has application dependencies, not package managers or their vendors.
+RUN python -m pip uninstall --yes pip
 
-# Copy site-packages from builder
-COPY --from=builder --chown=root:root /tmp/runtime-site-packages /tmp/site-packages
+COPY --from=builder --chown=root:root /opt/venv /opt/venv
 
-# Install to final location and cleanup
-RUN PYTHON_MAJOR_MINOR=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")') && \
-    rm -rf "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" && \
-    mv /tmp/site-packages "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" && \
-    find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
-        -type d -name "tests" -exec rm -rf {} + && \
-    find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
-        -maxdepth 1 -type d -name "poetry*" -exec rm -rf {} + && \
-    find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
-        -maxdepth 1 -type d -name "poetry-*.dist-info" -exec rm -rf {} + && \
-    find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
-        -type f \( -name "*.pyc" -o -name "*.pyo" \) -delete
+ENV VIRTUAL_ENV=/opt/venv \
+    PATH="/opt/venv/bin:$PATH"
 
-USER app
+USER 1001:1001
 
 CMD ["python", "-m", "souschef.server"]

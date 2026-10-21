@@ -121,6 +121,23 @@ class TestCanaryOutputFormatting:
 class TestGenerateCanaryDeploymentStrategy:
     """Test high-level canary deployment strategy generation."""
 
+    def test_missing_validated_steps_returns_error(self):
+        """Report an inconsistent validator result without generating a strategy."""
+        from souschef.deployment import generate_canary_deployment_strategy
+
+        with (
+            patch(
+                "souschef.deployment._validate_canary_inputs",
+                return_value=(None, None),
+            ),
+            patch("souschef.deployment._generate_canary_strategy") as generate,
+        ):
+            result = generate_canary_deployment_strategy("test-app")
+
+        assert "Error" in result
+        assert "steps must be non-None after successful validation" in result
+        generate.assert_not_called()
+
     def test_generate_canary_deployment_strategy_success(self):
         """Test successful canary deployment strategy generation."""
         from souschef.deployment import generate_canary_deployment_strategy

@@ -13,6 +13,10 @@ Before installing SousChef, ensure you have:
     - VS Code with MCP extension
     - Custom MCP client
 
+The optional web UI requires **Python 3.11+** for Streamlit and Pillow 13.
+Pillow-dependent development packages (including Matplotlib) are installed only
+on Python 3.11+. The core MCP server continues to support Python 3.10.
+
 ## Installation Methods
 
 ### Method 1: PyPI Installation (Recommended)

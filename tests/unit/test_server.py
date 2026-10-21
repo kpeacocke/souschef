@@ -3378,6 +3378,36 @@ def test_convert_chef_databag_to_vars_success():
     assert "secrets" in result
 
 
+@pytest.mark.parametrize(
+    "validation_result, message",
+    [
+        (
+            (None, None),
+            "databags_path must be non-None after successful validation",
+        ),
+        ((None, 1), "error must be string when present"),
+    ],
+)
+def test_generate_ansible_vault_from_databags_invalid_validation_result(
+    validation_result, message
+):
+    """Report inconsistent validator results without processing data bags."""
+    from souschef.server import generate_ansible_vault_from_databags
+
+    with (
+        patch(
+            "souschef.server._validate_databags_directory",
+            return_value=validation_result,
+        ),
+        patch("souschef.server._process_databag_directory") as process,
+    ):
+        result = generate_ansible_vault_from_databags("databags")
+
+    assert "Error" in result
+    assert message in result
+    process.assert_not_called()
+
+
 def test_generate_ansible_vault_from_databags_success():
     """Test generate_ansible_vault_from_databags with encrypted data bags."""
     from souschef.server import generate_ansible_vault_from_databags
@@ -6756,9 +6786,6 @@ end""",
                     # Call function - None/int might raise TypeError, which is acceptable
                     result = func(error_input)
 
-                    # If no exception, should return string or list
-                    assert isinstance(result, (str, list))
-
                 except (TypeError, AttributeError, ValueError):
                     # These exceptions are acceptable for invalid input
                     pass
@@ -6767,6 +6794,8 @@ end""",
                     raise AssertionError(
                         f"Function {func.__name__} raised unexpected exception {type(e).__name__}: {e}"
                     ) from None
+                else:
+                    assert isinstance(result, (str, list))
 
         # Test with various JSON and data formats
         data_formats = [
@@ -9223,12 +9252,13 @@ depends:
                 try:
                     result = tool(args[0]) if len(args) == 1 else tool(*args)
 
-                    assert isinstance(result, (str, list))
-                    if isinstance(result, str):
-                        assert len(result) > 0
                 except Exception as e:
                     # Some tools might fail with certain inputs, that's acceptable
                     assert isinstance(str(e), str)
+                else:
+                    assert isinstance(result, (str, list))
+                    if isinstance(result, str):
+                        assert len(result) > 0
 
     def test_resource_conversion_comprehensive(self):
         """Test resource conversion with all possible resource types."""
@@ -9732,8 +9762,6 @@ end""",
             for edge_input in edge_case_inputs:
                 try:
                     result = func(edge_input)
-                    # Function should return a string or list, never crash
-                    assert isinstance(result, (str, list))
                 except OSError as e:
                     # These exceptions are acceptable for file system operations
                     assert isinstance(str(e), str)
@@ -9745,6 +9773,8 @@ end""",
                         word in error_msg
                         for word in ["error", "not found", "invalid", "failed"]
                     )
+                else:
+                    assert isinstance(result, (str, list))
 
         # Test convert_resource_to_task with edge cases
         resource_edge_cases = [
@@ -9760,10 +9790,11 @@ end""",
         for resource_text, action in resource_edge_cases:
             try:
                 result = convert_resource_to_task(resource_text, action)
-                assert isinstance(result, str)
             except Exception as e:
                 # Should handle malformed input gracefully
                 assert isinstance(str(e), str)
+            else:
+                assert isinstance(result, str)
 
 
 def _test_parsing_with_temp_file(content, suffix, parser_func):
@@ -11135,10 +11166,11 @@ version '0.1.0' """,
         for query in search_queries:
             try:
                 result = _parse_chef_search_query(query)
-                assert isinstance(result, dict)
             except Exception as e:
                 # Some queries might fail parsing, that's acceptable
                 assert isinstance(str(e), str)
+                continue
+            assert isinstance(result, dict)
 
         # Test _parse_search_condition
         search_conditions = [
@@ -11160,10 +11192,10 @@ version '0.1.0' """,
         for condition in search_conditions:
             try:
                 result = _parse_search_condition(condition)
-                assert isinstance(result, dict)
             except Exception:
                 # Some conditions might fail, that's acceptable
-                pass
+                continue
+            assert isinstance(result, dict)
 
         # Test _generate_ansible_inventory_from_search
         search_results = [
@@ -11216,10 +11248,10 @@ version '0.1.0' """,
         for result in search_results:
             try:
                 inventory = _generate_ansible_inventory_from_search(result)
-                assert isinstance(inventory, dict)
             except Exception:
                 # Some results might not be valid, that's acceptable
-                pass
+                continue
+            assert isinstance(inventory, dict)
 
     def test_deep_nested_functionality(self):
         """Test deeply nested functionality and edge cases."""

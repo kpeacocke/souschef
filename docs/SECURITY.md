@@ -49,6 +49,18 @@ SousChef uses several tools to maintain secure dependencies:
 - **pip-audit**: Automated vulnerability scanning in CI/CD
 - **Dependabot**: Automated dependency updates (GitHub)
 
+Container builders and release tooling pin pip to **26.2.0** to address
+CVE-2026-13346 (arbitrary file installation via malicious package indexes) and
+CVE-2026-8643 (path traversal via malicious wheel entry point names). Rebuild and
+redeploy container images to apply these fixes to existing deployments.
+Production containers omit pip and Poetry altogether; their vendored
+dependencies are not part of the application runtime.
+
+Pillow is constrained to **13.0.0 or later** to address the 20 Dependabot alerts
+affecting earlier releases. The UI uses Streamlit 1.66.1 or later, which supports
+Pillow 13. UI and Pillow-dependent development packages require Python 3.11+;
+the core MCP server retains Python 3.10 support.
+
 CI policy for dependency auditing:
 
 - Policy: `fail-on-any` (CI fails when any vulnerability is reported)
@@ -68,6 +80,34 @@ poetry show --outdated
 # Update dependencies
 poetry update
 ```
+
+### Container Dependency Policy
+
+- Production Python 3.13 base images are pinned by multi-platform digest.
+  Dependabot checks Docker tags and digests weekly; review Python and operating
+  system upgrades before merging them.
+- MCP images use Alpine. System packages deliberately track the supported
+  Alpine branch and are refreshed by uncached builds and `apk upgrade`.
+  The approved, instruction-scoped Hadolint DL3018 exceptions avoid fragile
+  exact package revisions against a moving repository. These builds are not
+  fully reproducible at the operating-system package level.
+- The UI uses Debian slim because Streamlit's Watchdog dependency provides
+  glibc Linux wheels but no Alpine/musl wheels. Base-image updates deliver
+  operating-system fixes without adding compilers or source-build exceptions.
+- Third-party Python dependencies must have compatible wheels. Poetry enforces
+  `installer.only-binary :all:`; missing wheels fail the build. MCP builds only
+  the trusted local SousChef source into a wheel before offline installation.
+- Dependencies are installed into an isolated application virtual environment.
+  Only that environment is copied from the builder; pip and Poetry remain
+  build-time tools. The base image's pip is uninstalled from production too.
+  Install dependencies by rebuilding the image, not by running pip inside a
+  production container.
+- Containers run as UID/GID `1001:1001`. Compose, PR builds and releases use
+  the Dockerfiles' defaults rather than independent interpreter overrides.
+- CI builds all three production Dockerfiles on native AMD64 and ARM64 runners,
+  exercises the MCP protocol or UI HTTP endpoint, and rejects fixable HIGH or
+  CRITICAL container vulnerabilities. Uncached builds expose repository drift
+  before publishing. Update the Alpine branch before its support ends.
 
 ### AI Integration Security
 

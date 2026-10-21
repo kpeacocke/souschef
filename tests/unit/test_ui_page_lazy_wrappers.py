@@ -14,9 +14,9 @@ def test_bash_migration_wrapper_calls() -> None:
         convert_bash_content_to_ansible=lambda content, script_path=None: (
             f"convert:{content}:{script_path}"
         ),
-        generate_ansible_role_from_bash=lambda content,
-        role_name=None,
-        script_path=None: (f"role:{content}:{role_name}:{script_path}"),
+        generate_ansible_role_from_bash=lambda content, role_name=None, script_path=None: (
+            f"role:{content}:{role_name}:{script_path}"
+        ),
     )
     with patch("souschef.ui.pages.bash_migration._bash_api", return_value=fake_api):
         assert (

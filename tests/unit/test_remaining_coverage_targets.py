@@ -327,13 +327,13 @@ def test_cli_convert_json_generic_exception_branch() -> None:
     assert "not yaml" in result.output
 
 
-def test_cli_ls_error_path_exits() -> None:
+def test_cli_ls_error_path_exits(tmp_path: Path) -> None:
     """CLI ls should exit non-zero on error string responses."""
     runner = CliRunner()
-    with runner.isolated_filesystem():
-        Path("existing").mkdir()
-        with patch("souschef.cli.list_directory", return_value="Error: missing"):
-            result = runner.invoke(cli, ["ls", "existing"])
+    existing = tmp_path / "existing"
+    existing.mkdir()
+    with patch("souschef.cli.list_directory", return_value="Error: missing"):
+        result = runner.invoke(cli, ["ls", str(existing)])
 
     assert result.exit_code == 1
 

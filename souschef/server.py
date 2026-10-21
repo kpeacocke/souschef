@@ -1538,12 +1538,14 @@ def generate_ansible_vault_from_databags(
         # Validate inputs
         databags_path, error = _validate_databags_directory(databags_directory)
         if error:
-            assert isinstance(error, str), "error must be string when present"
+            if not isinstance(error, str):
+                raise TypeError("error must be string when present")
             return error
 
-        assert databags_path is not None, (
-            "databags_path must be non-None after successful validation"
-        )
+        if databags_path is None:
+            raise ValueError(
+                "databags_path must be non-None after successful validation"
+            )
 
         conversion_results = []
 
@@ -4608,25 +4610,27 @@ def _generate_conversion_report(conversion_summary: dict, role_dir: Path) -> str
         )
 
     if conversion_summary["errors"]:
-        summary_lines.append("")
-        summary_lines.append("## Errors:")
+        summary_lines.extend(["", "## Errors:"])
         for error in conversion_summary["errors"]:
             summary_lines.append(f"- ERROR: {error}")
 
     if conversion_summary["warnings"]:
-        summary_lines.append("")
-        summary_lines.append("## Warnings:")
+        summary_lines.extend(["", "## Warnings:"])
         for warning in conversion_summary["warnings"]:
             summary_lines.append(f"- WARNING: {warning}")
 
-    summary_lines.append("")
-    summary_lines.append(f"## Role Location: {role_dir}")
-    summary_lines.append("")
-    summary_lines.append("## Next Steps:")
-    summary_lines.append("1. Review converted files for accuracy")
-    summary_lines.append("2. Test the role with ansible-playbook --check")
-    summary_lines.append("3. Update variable references and dependencies")
-    summary_lines.append("4. Run integration tests")
+    summary_lines.extend(
+        [
+            "",
+            f"## Role Location: {role_dir}",
+            "",
+            "## Next Steps:",
+            "1. Review converted files for accuracy",
+            "2. Test the role with ansible-playbook --check",
+            "3. Update variable references and dependencies",
+            "4. Run integration tests",
+        ]
+    )
 
     return "\n".join(summary_lines)
 
@@ -4872,14 +4876,16 @@ def _generate_batch_conversion_report(overall_summary: dict, output_dir: Path) -
     if overall_summary["converted_cookbooks"]:
         summary_lines.append("## Successfully Converted Cookbooks:")
         for cookbook in overall_summary["converted_cookbooks"]:
-            summary_lines.append(
-                f"- **{cookbook['cookbook_name']}** → `{cookbook['role_name']}`"
+            summary_lines.extend(
+                [
+                    f"- **{cookbook['cookbook_name']}** → `{cookbook['role_name']}`",
+                    f"  - Files converted: {cookbook['converted_files']}",
+                    f"  - Errors: {cookbook['errors']}",
+                    f"  - Warnings: {cookbook['warnings']}",
+                    f"  - Location: {cookbook['role_path']}",
+                    "",
+                ]
             )
-            summary_lines.append(f"  - Files converted: {cookbook['converted_files']}")
-            summary_lines.append(f"  - Errors: {cookbook['errors']}")
-            summary_lines.append(f"  - Warnings: {cookbook['warnings']}")
-            summary_lines.append(f"  - Location: {cookbook['role_path']}")
-            summary_lines.append("")
 
     if overall_summary["failed_cookbooks"]:
         summary_lines.append("## Failed Conversions:")
@@ -4889,14 +4895,18 @@ def _generate_batch_conversion_report(overall_summary: dict, output_dir: Path) -
             )
         summary_lines.append("")
 
-    summary_lines.append(f"## Output Directory: {output_dir}")
-    summary_lines.append("")
-    summary_lines.append("## Next Steps:")
-    summary_lines.append("1. Review converted roles for accuracy")
-    summary_lines.append("2. Test roles with ansible-playbook --check")
-    summary_lines.append("3. Update variable references and cross-role dependencies")
-    summary_lines.append("4. Run integration tests across all converted roles")
-    summary_lines.append("5. Consider using Ansible Galaxy for role distribution")
+    summary_lines.extend(
+        [
+            f"## Output Directory: {output_dir}",
+            "",
+            "## Next Steps:",
+            "1. Review converted roles for accuracy",
+            "2. Test roles with ansible-playbook --check",
+            "3. Update variable references and cross-role dependencies",
+            "4. Run integration tests across all converted roles",
+            "5. Consider using Ansible Galaxy for role distribution",
+        ]
+    )
 
     return "\n".join(summary_lines)
 
@@ -6335,9 +6345,10 @@ def query_salt_master(
         )
 
     except urllib.error.HTTPError as e:
-        return json.dumps(
-            {"error": f"HTTP error {e.code}: {e.reason}", "status": "error"}
-        )
+        with e:
+            return json.dumps(
+                {"error": f"HTTP error {e.code}: {e.reason}", "status": "error"}
+            )
     except urllib.error.URLError as e:
         return json.dumps({"error": f"Connection error: {e.reason}", "status": "error"})
     except Exception as e:
@@ -6442,6 +6453,11 @@ def _build_salt_migration_report_markdown(
     effort_hours = summary.get("estimated_effort_hours", 0)
     effort_weeks = summary.get("estimated_effort_weeks", "unknown")
     high_files = summary.get("high_complexity_files", [])
+    high_files_text = (
+        "".join(f"- `{file}`\\n" for file in high_files)
+        if high_files
+        else "- None identified - all files are LOW or MEDIUM complexity"
+    )
     module_breakdown = summary.get("module_breakdown", {})
 
     by_level: dict[str, int] = {"low": 0, "medium": 0, "high": 0}
@@ -6528,7 +6544,7 @@ to Ansible/AAP. The overall migration complexity is assessed as **{complexity_le
 
 ## High-Complexity Files Requiring Manual Review
 
-{"".join(f"- `{f}`\\n" for f in high_files) if high_files else "- None identified - all files are LOW or MEDIUM complexity"}
+{high_files_text}
 
 ---
 

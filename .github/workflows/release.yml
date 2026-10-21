@@ -55,8 +55,8 @@ jobs:
 
     - name: Install semantic-release tooling
       run: |
-        python -m pip install --upgrade --no-cache-dir "pip==26.1.1"
-        python -m pip install --no-cache-dir "python-semantic-release==9.21.1"
+        python -m pip install --upgrade --no-cache-dir --only-binary :all: "pip==26.2.0"
+        python -m pip install --no-cache-dir --only-binary :all: "python-semantic-release==9.21.1"
 
     - name: Determine next version with python-semantic-release
       id: get-version
@@ -179,6 +179,7 @@ jobs:
         IMAGE="ghcr.io/${{ github.repository_owner }}/souschef:$VERSION"
         if docker manifest inspect "$IMAGE" >/dev/null 2>&1 || \
            curl -fsSL -H "Authorization: Bearer $GHCR_TOKEN" \
+           --proto '=https' --proto-redir '=https' \
            "https://ghcr.io/v2/${{ github.repository_owner }}/souschef/manifests/$VERSION" >/dev/null 2>&1; then
           echo "exists=true" >> $GITHUB_OUTPUT
           echo "Docker image $IMAGE already exists"
@@ -197,6 +198,7 @@ jobs:
         IMAGE="ghcr.io/${{ github.repository_owner }}/souschef-mcp:$VERSION"
         if docker manifest inspect "$IMAGE" >/dev/null 2>&1 || \
            curl -fsSL -H "Authorization: Bearer $GHCR_TOKEN" \
+           --proto '=https' --proto-redir '=https' \
            "https://ghcr.io/v2/${{ github.repository_owner }}/souschef-mcp/manifests/$VERSION" >/dev/null 2>&1; then
           echo "exists=true" >> $GITHUB_OUTPUT
           echo "Docker MCP image $IMAGE already exists"
@@ -242,8 +244,8 @@ jobs:
 
     - name: Install Twine (for package validation)
       run: |
-        python -m pip install --upgrade --no-cache-dir "pip==26.1.1"
-        python -m pip install --no-cache-dir "twine==6.1.0"
+        python -m pip install --upgrade --no-cache-dir --only-binary :all: "pip==26.2.0"
+        python -m pip install --no-cache-dir --only-binary :all: "twine==6.1.0"
 
     - name: Set package version to release version
       env:
@@ -447,9 +449,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=ui
           cache-to: type=gha,mode=max,scope=ui
-          build-args: |
-            PYTHON_VERSION=3.14.3
-            POETRY_VERSION=2.3.4
           provenance: true
           sbom: true
 
@@ -563,9 +562,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=mcp
           cache-to: type=gha,mode=max,scope=mcp
-          build-args: |
-            PYTHON_VERSION=3.14.3
-            POETRY_VERSION=2.3.4
           provenance: true
           sbom: true
 

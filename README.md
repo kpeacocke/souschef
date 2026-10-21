@@ -4,6 +4,9 @@ Transform Chef, SaltStack, Puppet, PowerShell, and Bash automation to Ansible, a
 
 **Quick Facts:** MIT License | Python 3.10+ | 95 MCP Tools | 91% Test Coverage
 
+The optional web UI and Pillow-dependent development packages require Python 3.11+.
+Core MCP server support remains Python 3.10+.
+
 [![GitHub release](https://img.shields.io/github/release/kpeacocke/souschef)](https://github.com/kpeacocke/souschef/releases)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -52,6 +55,10 @@ cp config/claude-desktop.json ~/Library/Application\ Support/Claude/claude_deskt
 ```
 
 **Other MCP clients:** See [config/CONFIGURATION.md](config/CONFIGURATION.md) for VS Code Copilot, custom setups, and Docker deployment.
+
+Production containers use isolated, wheel-only dependencies and omit pip and
+Poetry. Rebuild images to change dependencies; see the
+[container dependency policy](docs/SECURITY.md#container-dependency-policy).
 
 ## Key Features
 

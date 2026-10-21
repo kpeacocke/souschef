@@ -1070,13 +1070,9 @@ class MigrationOrchestrator:
 
         # Process in parallel
         try:
-            mp_context = None
-            if "fork" in multiprocessing.get_all_start_methods():
-                mp_context = multiprocessing.get_context("fork")
-
             with ProcessPoolExecutor(
                 max_workers=max_workers,
-                mp_context=mp_context,
+                mp_context=multiprocessing.get_context("spawn"),
             ) as executor:
                 # Submit all tasks
                 future_to_file = {
@@ -1154,13 +1150,9 @@ class MigrationOrchestrator:
 
         # Process in parallel
         try:
-            mp_context = None
-            if "fork" in multiprocessing.get_all_start_methods():
-                mp_context = multiprocessing.get_context("fork")
-
             with ProcessPoolExecutor(
                 max_workers=max_workers,
-                mp_context=mp_context,
+                mp_context=multiprocessing.get_context("spawn"),
             ) as executor:
                 # Submit all tasks
                 future_to_file = {

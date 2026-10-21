@@ -73,6 +73,15 @@ All benchmarks measured on: Linux, Python 3.13, single-threaded execution.
 
 ## Performance Characteristics
 
+### Parallel Migration Workers
+
+Parallel recipe and attribute conversion uses spawned worker processes on all
+platforms. Workers start with a fresh interpreter rather than inheriting locks
+from a threaded UI or server, avoiding the deadlock risk of `fork`.
+This adds process startup overhead, so sequential conversion may be faster for
+small cookbooks. Standalone scripts that launch parallel migrations must place
+their entry point under `if __name__ == "__main__":`.
+
 ### Scalability
 
 SousChef scales linearly with cookbook size:

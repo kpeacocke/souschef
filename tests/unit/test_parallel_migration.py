@@ -1,5 +1,6 @@
 """Tests for parallel migration processing in migration_v2."""
 
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 
@@ -7,6 +8,8 @@ import pytest
 
 from souschef.migration_v2 import (
     MigrationOrchestrator,
+    MigrationResult,
+    MigrationStatus,
     _process_attribute_worker,
     _process_recipe_worker,
 )
@@ -40,6 +43,53 @@ def mock_cookbook_path(tmp_path: Path) -> Path:
     )
 
     return cookbook
+
+
+@pytest.mark.parametrize("resource", ["recipes", "attributes"])
+def test_parallel_conversion_spawns_from_background_thread(
+    mock_cookbook_path: Path, resource: str
+) -> None:
+    """Real workers must spawn safely without falling back in threaded callers."""
+    orchestrator = MigrationOrchestrator(
+        chef_version="14.15.6",
+        target_platform="awx",
+        target_version="24.6.1",
+    )
+    orchestrator.result = MigrationResult(
+        migration_id="threaded-spawn",
+        status=MigrationStatus.IN_PROGRESS,
+        chef_version="14.15.6",
+        target_platform="awx",
+        target_version="24.6.1",
+        ansible_version="2.9",
+        created_at="2024-01-01T00:00:00",
+        updated_at="2024-01-01T00:00:00",
+        source_cookbook=str(mock_cookbook_path),
+    )
+    parallel = getattr(orchestrator, f"_convert_{resource}_parallel")
+    with (
+        patch(
+            "souschef.migration_v2.ProcessPoolExecutor",
+            wraps=ProcessPoolExecutor,
+        ) as executor,
+        patch.object(orchestrator, f"_convert_{resource}") as fallback,
+        ThreadPoolExecutor(max_workers=1) as caller,
+    ):
+        caller.submit(parallel, str(mock_cookbook_path), max_workers=2).result(
+            timeout=60
+        )
+
+    fallback.assert_not_called()
+    assert executor.call_args.kwargs["mp_context"].get_start_method() == "spawn"
+    expected = (
+        {f"recipe{i}.yml" for i in range(5)}
+        if resource == "recipes"
+        else {f"vars/attr{i}.yml" for i in range(3)}
+    )
+    assert set(orchestrator.result.playbooks_generated) == expected
+    assert getattr(orchestrator.result.metrics, f"{resource}_converted") == len(
+        expected
+    )
 
 
 class TestRecipeWorker:
@@ -293,9 +343,15 @@ class TestParallelRecipeConversion:
                 return "Error: Conversion failed"
             return "---\nplaybook"
 
-        with patch(
-            "souschef.migration_v2.generate_playbook_from_recipe"
-        ) as mock_generate:
+        with (
+            patch(
+                "souschef.migration_v2.ProcessPoolExecutor",
+                return_value=ThreadPoolExecutor(max_workers=2),
+            ),
+            patch(
+                "souschef.migration_v2.generate_playbook_from_recipe"
+            ) as mock_generate,
+        ):
             mock_generate.side_effect = mock_conversion
 
             from souschef.migration_v2 import MigrationResult, MigrationStatus
@@ -414,7 +470,13 @@ class TestParallelAttributeConversion:
                 return "Error: Parse failed"
             return "app:\n  value: test"
 
-        with patch("souschef.migration_v2.parse_attributes") as mock_parse:
+        with (
+            patch(
+                "souschef.migration_v2.ProcessPoolExecutor",
+                return_value=ThreadPoolExecutor(max_workers=2),
+            ),
+            patch("souschef.migration_v2.parse_attributes") as mock_parse,
+        ):
             mock_parse.side_effect = mock_parsing
 
             from souschef.migration_v2 import MigrationResult, MigrationStatus

@@ -197,17 +197,22 @@ def test_server_query_salt_master_connection_error() -> None:
 def test_server_query_salt_master_http_error() -> None:
     """HTTP errors are returned as JSON error."""
     import urllib.error
+    from io import BytesIO
+
+    response_body = BytesIO(b"unauthorised")
+    error = urllib.error.HTTPError(
+        "https://salt-master:8080/login", 401, "Unauthorized", {}, response_body
+    )
 
     with patch(
         "urllib.request.urlopen",
-        side_effect=urllib.error.HTTPError(
-            "https://salt-master:8080/login", 401, "Unauthorized", {}, None
-        ),
+        side_effect=error,
     ):
         result = query_salt_master("https://salt-master:8080", "user", "pass")
     result_dict = json.loads(result)
     assert result_dict["status"] == "error"
     assert "401" in result_dict["error"]
+    assert response_body.closed
 
 
 def test_server_query_salt_master_auth_no_token() -> None:

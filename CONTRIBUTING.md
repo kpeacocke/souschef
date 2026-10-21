@@ -6,6 +6,7 @@ Thank you for contributing! This guide covers essentials for contributing to Che
 
 ```bash
 git clone https://github. com/kpeacocke/souschef.git && cd souschef
+poetry env use python3.14
 poetry install
 poetry run pytest --cov=souschef  # All tests should pass
 poetry run ruff check .            # No errors
@@ -13,6 +14,14 @@ poetry run mypy souschef           # No type errors
 ```
 
 **Prerequisites:** Python 3.10+, Poetry, Git
+
+Use Python 3.14 for day-to-day development. CI runs the test suite on Python
+3.13 and 3.14; production containers continue to default to Python 3.13.
+The core package retains Python 3.10 support, while the UI and Pillow-dependent
+development packages require Python 3.11+.
+
+Development Ansible dependencies require Python 3.12+ and use ansible-core
+2.20 or 2.21. Python 3.14 requires ansible-core 2.20 or later.
 
 ## Architecture
 
@@ -46,6 +55,14 @@ poetry run pytest --cov      # Tests (MUST pass, 90%+ coverage)
 ```
 
 **Critical:** Never add code suppressions (`# noqa`, `# type: ignore`, etc.) without user approval. Fix the issue, don't mask it.
+
+Ruff targets Python 3.10 to match the core package's minimum supported version,
+even when development and CI use newer interpreters.
+
+Pre-commit uses isolated Ruff 0.17.0 and Poetry 2.5.1 environments so global
+tool installations cannot reformat files differently or downgrade the lockfile.
+Use Poetry 2.5.1 when regenerating the lockfile, and update the hook pins alongside
+deliberate formatter or lockfile-tool upgrades.
 
 **Exception:** Pre-existing `# noqa: F401` for backward compatibility exports—respect these.
 

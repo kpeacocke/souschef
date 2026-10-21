@@ -553,37 +553,42 @@ class TestValidateCollectionCompatibility:
 class TestCliV2Commands:
     """Tests for CLI v2 commands covering missing branches."""
 
-    def test_v2_migrate_saves_to_output_path(self) -> None:
+    def test_v2_migrate_saves_to_output_path(self, tmp_path: Path) -> None:
         """v2 migrate command saves result to output path (lines 370-375)."""
         from click.testing import CliRunner
 
         from souschef.cli_v2_commands import create_v2_group
+        from souschef.migration_v2 import MigrationStatus
 
         runner = CliRunner()
         cli_group = create_v2_group()
-
-        with runner.isolated_filesystem():
+        output_path = tmp_path / "out.json"
+        with patch("souschef.cli_v2_commands.MigrationOrchestrator") as orchestrator:
             mock_result = MagicMock()
-            from souschef.migration_v2 import MigrationStatus
-
             mock_result.status = MigrationStatus.CONVERTED
             mock_result.migration_id = "test-id"
             mock_result.to_dict.return_value = {"status": "converted"}
+            orchestrator.return_value.migrate_cookbook.return_value = mock_result
+            result = runner.invoke(
+                cli_group,
+                [
+                    "migrate",
+                    "--cookbook-path",
+                    str(tmp_path),
+                    "--chef-version",
+                    "14.15.6",
+                    "--target-platform",
+                    "awx",
+                    "--target-version",
+                    "24.6.1",
+                    "--output",
+                    str(output_path),
+                ],
+            )
 
-            with patch("souschef.cli_v2_commands._run_v2_migration") as mock_run:
-                mock_run.return_value = (mock_result, None)
-                result = runner.invoke(
-                    cli_group,
-                    [
-                        "migrate",
-                        "--cookbook",
-                        "/workspaces/souschef/fake_cookbook",
-                        "--output",
-                        "out.json",
-                    ],
-                )
-            # The command may fail due to missing cookbook; check it ran.
-            assert result.exit_code in (0, 1, 2)
+        assert result.exit_code == 0, result.output
+        assert output_path.read_text() == '{\n  "status": "converted"\n}'
+        assert f"Result saved to: {output_path}" in result.output
 
     def test_v2_migrate_failed_status_exits_1(self) -> None:
         """v2 migrate with FAILED status calls sys.exit(1) (line 380)."""

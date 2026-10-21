@@ -15,9 +15,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.ui
-      args:
-        PYTHON_VERSION: "3.14.3"
-        POETRY_VERSION: "2.3.2"
     ports:
       - "9999:9999"
     env_file:
@@ -170,4 +167,3 @@ networks:
   souschef-internal:
     driver: bridge
     internal: true
-

@@ -3,6 +3,7 @@
 import os
 import sqlite3
 import tempfile
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
@@ -33,7 +34,7 @@ class TestStorageManager:
             manager = StorageManager(db_path=Path(tmpdir) / "test.db")
 
             # Verify tables exist
-            with sqlite3.connect(str(manager.db_path)) as conn:
+            with closing(sqlite3.connect(str(manager.db_path))) as conn:
                 cursor = conn.execute(
                     "SELECT name FROM sqlite_master WHERE type='table'"
                 )
@@ -246,7 +247,7 @@ class TestStorageManager:
             assert id1 == id2
 
             # Verify only one record with this fingerprint exists
-            with sqlite3.connect(str(manager.db_path)) as conn:
+            with closing(sqlite3.connect(str(manager.db_path))) as conn:
                 cursor = conn.execute(
                     "SELECT COUNT(*) FROM analysis_results "
                     "WHERE content_fingerprint = ?",

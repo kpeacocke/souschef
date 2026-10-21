@@ -263,6 +263,21 @@ class TestLoggingConfiguration:
         assert logger.name == "souschef.test"
         assert isinstance(logger, logging.Logger)
 
+    def test_reconfigure_logging_closes_previous_file(self, tmp_path):
+        """Replacing logging handlers must close the previous log file."""
+        configure_logging(log_file=str(tmp_path / "previous.log"))
+        file_handler = next(
+            handler
+            for handler in logging.getLogger().handlers
+            if isinstance(handler, logging.FileHandler)
+        )
+        stream = file_handler.stream
+
+        configure_logging()
+
+        assert stream.closed
+        assert file_handler not in logging.getLogger().handlers
+
 
 class TestContextManagement:
     """Test context management functionality."""

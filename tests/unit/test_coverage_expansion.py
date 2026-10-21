@@ -359,14 +359,9 @@ class TestCLIExceptionPaths:
 class TestCLIHelpers:
     """Test CLI helper functions."""
 
-    def test_output_result_success(self):
+    def test_output_result_success(self, capsys):
         """Test _output_result with valid output."""
-        import contextlib
-
         from souschef.cli import _output_result
 
-        runner = CliRunner()
-
-        # Test with string result
-        with runner.isolated_filesystem(), contextlib.suppress(SystemExit, Exception):
-            _output_result("Test output", "text")
+        _output_result("Test output", "text")
+        assert capsys.readouterr().out == "Test output\n"
