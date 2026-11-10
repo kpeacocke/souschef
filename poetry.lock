@@ -299,6 +299,7 @@ description = "The uncompromising code formatter."
 optional = false
 python-versions = ">=3.10"
 groups = ["dev"]
+markers = "python_version >= \"3.12\""
 files = [
     {file = "black-26.10.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:51d5e417e700fe6ec0b0ecdc408c6f6cb5def80328f31f724993d82c6486b746"},
     {file = "black-26.10.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:70ccbd175b7f6be29d2b727ee7ca6b4c54053df59da653a6df80b175d20a94fa"},
@@ -336,8 +337,6 @@ packaging = ">=22.0"
 pathspec = ">=1.0.0"
 platformdirs = ">=2"
 pytokens = ">=0.4.0,<0.5.0"
-tomli = {version = ">=1.1.0", markers = "python_version < \"3.11\""}
-typing-extensions = {version = ">=4.0.1", markers = "python_version < \"3.11\""}
 
 [package.extras]
 colorama = ["colorama (>=0.4.3)"]
@@ -4855,6 +4854,7 @@ description = "A Fast, spec compliant Python 3.14+ tokenizer that runs on older 
 optional = false
 python-versions = ">=3.8"
 groups = ["dev"]
+markers = "python_version >= \"3.12\""
 files = [
     {file = "pytokens-0.4.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:2a44ed93ea23415c54f3face3b65ef2b844d96aeb3455b8a69b3df6beab6acc5"},
     {file = "pytokens-0.4.1-cp310-cp310-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:add8bf86b71a5d9fb5b89f023a80b791e04fba57960aa790cc6125f7f1d39dfe"},
@@ -5909,14 +5909,14 @@ keyring = ["keyring (>=21.2.0)"]
 
 [[package]]
 name = "types-networkx"
-version = "3.6.1.20261029"
+version = "3.6.1.20261031"
 description = "Typing stubs for networkx"
 optional = false
 python-versions = ">=3.10"
 groups = ["dev"]
 files = [
-    {file = "types_networkx-3.6.1.20261029-py3-none-any.whl", hash = "sha256:20e9a702d40d2d4314d35ae9e2a29d55321b75984033d8279ead87ebb8feaba6"},
-    {file = "types_networkx-3.6.1.20261029.tar.gz", hash = "sha256:c7f3a9db5e1264978c1c21d8414e89d3422f6970d29ee42ed59c6e00ce887469"},
+    {file = "types_networkx-3.6.1.20261031-py3-none-any.whl", hash = "sha256:5989df7934033028e340164270e5786d6b93f57c8731f7b16bcd5d1302f35acc"},
+    {file = "types_networkx-3.6.1.20261031.tar.gz", hash = "sha256:7fcbd2a8dc0fed5ae41322a9e72c299e931e2c9c242ea5b75799c0b6545f6272"},
 ]
 
 [package.extras]
