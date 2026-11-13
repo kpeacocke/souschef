@@ -29,6 +29,58 @@ class TestMigrationAssessment:
             result = assess_chef_migration_complexity(str(tmppath))
             assert isinstance(result, str)
 
+    def test_validate_conversion_reports_source_coverage(self) -> None:
+        """Source-aware validation reports missing generated tasks."""
+        source = """\
+package { 'nginx': ensure => installed }
+service { 'nginx': ensure => running }
+"""
+        converted = """\
+- name: "Manage package: nginx"
+  ansible.builtin.package:
+    name: nginx
+    state: present
+"""
+
+        result = json.loads(
+            validate_conversion(
+                "recipe",
+                converted,
+                output_format="json",
+                source_type="puppet",
+                source_content=source,
+            )
+        )
+
+        assert result["readiness"]["status"] == "needs_review"
+        assert result["readiness"]["source_constructs"] == 2
+        assert result["readiness"]["generated_tasks"] == 1
+        assert any("fewer tasks" in item["message"] for item in result["results"])
+
+    def test_validate_conversion_flags_unresolved_placeholders(self) -> None:
+        """Source-aware validation flags manual-conversion placeholders."""
+        source = "package { 'nginx': ensure => installed }"
+        converted = """\
+- name: Manual migration required
+  ansible.builtin.debug:
+    msg: Manual migration required for Hiera lookup
+  tags:
+    - puppet_unconverted
+"""
+
+        result = json.loads(
+            validate_conversion(
+                "recipe",
+                converted,
+                output_format="json",
+                source_type="puppet",
+                source_content=source,
+            )
+        )
+
+        assert result["readiness"]["status"] == "needs_review"
+        assert result["readiness"]["unresolved_placeholders"] == 1
+
     def test_assess_complexity_invalid_scope(self) -> None:
         """Test assessment with invalid migration scope."""
         with tempfile.TemporaryDirectory() as tmpdir:

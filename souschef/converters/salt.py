@@ -1,7 +1,11 @@
 """SaltStack SLS to Ansible playbook converter."""
 
 import json
+import re
+from pathlib import Path
 from typing import Any
+
+import yaml
 
 from souschef.core.constants import (
     ERROR_FILE_NOT_FOUND,
@@ -31,6 +35,12 @@ _MOD_FILE = "ansible.builtin.file"
 _MOD_LINEINFILE = "ansible.builtin.lineinfile"
 _MOD_BLOCKINFILE = "ansible.builtin.blockinfile"
 _MOD_SERVICE = "ansible.builtin.service"
+_MOD_COMMAND = "ansible.builtin.command"
+_MOD_COPY = "ansible.builtin.copy"
+_SALT_URL_PREFIX = "salt://"
+_SALT_FILES_PREFIX = "files/"
+_SALT_TEMPLATES_PREFIX = "templates/"
+_TOP_SLS = "top.sls"
 _MAIN_YML = "main.yml"
 
 # Ansible module mappings for Salt state categories
@@ -40,16 +50,16 @@ _ANSIBLE_MODULE_MAP: dict[str, str] = {
     "file_directory": _MOD_FILE,
     "file_absent": _MOD_FILE,
     "file_symlink": _MOD_FILE,
-    "file_recurse": "ansible.builtin.copy",
+    "file_recurse": _MOD_COPY,
     "file_touch": _MOD_FILE,
     "file_replace": _MOD_LINEINFILE,
     "file_line": _MOD_LINEINFILE,
-    "file_copy": "ansible.builtin.copy",
+    "file_copy": _MOD_COPY,
     "file_append": _MOD_BLOCKINFILE,
     "file_prepend": _MOD_BLOCKINFILE,
     "file_patch": "ansible.builtin.patch",
     "service": _MOD_SERVICE,
-    "command": "ansible.builtin.command",
+    "command": _MOD_COMMAND,
     "user": "ansible.builtin.user",
     "group": "ansible.builtin.group",
     "git": "ansible.builtin.git",
@@ -130,55 +140,99 @@ def _build_file_task(state: dict[str, Any]) -> dict[str, Any]:
     func = state.get("function", "managed")
     args = state.get("args", {})
     state_id = state.get("id", "file")
-
-    module_key = f"file_{func}"
-    ansible_module = _ANSIBLE_MODULE_MAP.get(module_key, _MOD_FILE)
-
-    task: dict[str, Any] = {"name": f"Manage file: {state_id}"}
-    params: dict[str, Any] = {}
-
     dest = args.get("name", state_id)
-    params["dest"] = str(dest)
 
     if func == "managed":
-        source = args.get("source", "")
-        if source:
-            # Strip the salt:// prefix safely - only remove the scheme prefix
-            src_str = str(source)
-            if src_str.startswith("salt://"):
-                src_str = src_str[len("salt://") :]
-            # Reject path traversal attempts
-            if ".." not in src_str:
-                params["src"] = src_str
-        _apply_file_ownership(params, args)
-    elif func == "directory":
-        params["path"] = params.pop("dest")
+        return _build_managed_file_task(state_id, dest, args)
+    if func == "recurse":
+        return _build_recurse_file_task(state_id, dest, args)
+    if func in {"directory", "absent", "symlink"}:
+        return _build_simple_file_task(func, state_id, dest, args)
+    if func in {"replace", "line", "append", "prepend"}:
+        return _build_line_file_task(func, state_id, dest, args)
+
+    module = _ANSIBLE_MODULE_MAP.get(f"file_{func}", _MOD_FILE)
+    return _named_file_task(state_id, module, {"dest": str(dest)})
+
+
+def _named_file_task(
+    state_id: str, module: str, params: dict[str, Any]
+) -> dict[str, Any]:
+    """Wrap file module parameters in a consistently named task."""
+    return {"name": f"Manage file: {state_id}", module: params}
+
+
+def _build_managed_file_task(
+    state_id: str, dest: Any, args: dict[str, Any]
+) -> dict[str, Any]:
+    """Build a Salt file.managed template task."""
+    params: dict[str, Any] = {"dest": str(dest)}
+    source = str(args.get("source", ""))
+    if source.startswith(_SALT_URL_PREFIX):
+        source = source[len(_SALT_URL_PREFIX) :]
+    for prefix in (_SALT_TEMPLATES_PREFIX, _SALT_FILES_PREFIX):
+        if source.startswith(prefix):
+            source = source[len(prefix) :]
+            break
+    if source and ".." not in source:
+        params["src"] = source
+    _apply_file_ownership(params, args)
+    return _named_file_task(state_id, _ANSIBLE_MODULE_MAP["file_managed"], params)
+
+
+def _build_recurse_file_task(
+    state_id: str, dest: Any, args: dict[str, Any]
+) -> dict[str, Any]:
+    """Build a Salt file.recurse copy task."""
+    params: dict[str, Any] = {
+        "dest": str(dest),
+        "directory_mode": str(args.get("dir_mode", "0755")),
+    }
+    source = str(args.get("source", ""))
+    if source.startswith(_SALT_URL_PREFIX):
+        source = source[len(_SALT_URL_PREFIX) :]
+    if source.startswith(_SALT_FILES_PREFIX):
+        source = source[len(_SALT_FILES_PREFIX) :]
+    if source and ".." not in source:
+        params["src"] = source
+    if args.get("file_mode"):
+        params["mode"] = str(args["file_mode"])
+    _apply_file_ownership(params, args)
+    return _named_file_task(state_id, _MOD_COPY, params)
+
+
+def _build_simple_file_task(
+    func: str, state_id: str, dest: Any, args: dict[str, Any]
+) -> dict[str, Any]:
+    """Build directory, absent, or symlink state tasks."""
+    params: dict[str, Any] = {"path": str(dest)}
+    if func == "directory":
         params["state"] = "directory"
         _apply_file_ownership(params, args)
-        ansible_module = _MOD_FILE
     elif func == "absent":
-        params["path"] = params.pop("dest")
         params["state"] = "absent"
-        ansible_module = _MOD_FILE
-    elif func == "symlink":
-        params["path"] = params.pop("dest")
+    else:
         params["src"] = str(args.get("target", ""))
         params["state"] = "link"
-        ansible_module = _MOD_FILE
-    elif func in ("replace", "line"):
-        params.pop("dest", None)
-        params["path"] = str(dest)
-        params["regexp"] = str(args.get("pattern", ""))
-        params["line"] = str(args.get("repl", ""))
-        ansible_module = "ansible.builtin.lineinfile"
-    elif func in ("append", "prepend"):
-        params.pop("dest", None)
-        params["path"] = str(dest)
-        params["block"] = str(args.get("text", args.get("content", "")))
-        ansible_module = "ansible.builtin.blockinfile"
+    return _named_file_task(state_id, _MOD_FILE, params)
 
-    task[ansible_module] = params
-    return task
+
+def _build_line_file_task(
+    func: str, state_id: str, dest: Any, args: dict[str, Any]
+) -> dict[str, Any]:
+    """Build line and block editing tasks for Salt file states."""
+    if func in {"replace", "line"}:
+        params = {
+            "path": str(dest),
+            "regexp": str(args.get("pattern", "")),
+            "line": str(args.get("repl", "")),
+        }
+        return _named_file_task(state_id, _MOD_LINEINFILE, params)
+    params = {
+        "path": str(dest),
+        "block": str(args.get("text", args.get("content", ""))),
+    }
+    return _named_file_task(state_id, _MOD_BLOCKINFILE, params)
 
 
 def _build_service_task(state: dict[str, Any]) -> dict[str, Any]:
@@ -242,10 +296,7 @@ def _build_cmd_task(state: dict[str, Any]) -> dict[str, Any]:
     if creates:
         params["creates"] = str(creates)
 
-    if func == "script":
-        ansible_module = "ansible.builtin.shell"
-    else:
-        ansible_module = "ansible.builtin.command"
+    ansible_module = "ansible.builtin.shell" if func == "script" else _MOD_COMMAND
 
     task: dict[str, Any] = {
         "name": f"Run command: {state_id}",
@@ -383,6 +434,41 @@ def _build_pip_task(state: dict[str, Any]) -> dict[str, Any]:
     return task
 
 
+def _build_pkgrepo_task(state: dict[str, Any]) -> dict[str, Any]:
+    """Build an APT repository task from a Salt managed repository."""
+    args = state.get("args", {})
+    state_id = state.get("id", "repository")
+    params: dict[str, Any] = {
+        "repo": str(args.get("name", state_id)),
+        "state": "present",
+    }
+    key_url = args.get("key_url")
+    if key_url:
+        params["key"] = str(key_url)
+    return {
+        "name": f"Manage package repository: {state_id}",
+        "ansible.builtin.apt_repository": params,
+    }
+
+
+def _build_virtualenv_task(state: dict[str, Any]) -> dict[str, Any]:
+    """Build an idempotent Python virtual environment creation task."""
+    args = state.get("args", {})
+    path = str(state.get("id", "venv"))
+    python = str(args.get("python", "python3"))
+    task: dict[str, Any] = {
+        "name": f"Create Python virtual environment: {path}",
+        _MOD_COMMAND: {
+            "argv": [python, "-m", "venv", path],
+            "creates": f"{path}/bin/activate",
+        },
+    }
+    user = args.get("user")
+    if user:
+        task["become_user"] = str(user)
+    return task
+
+
 def _build_generic_task(state: dict[str, Any]) -> dict[str, Any]:
     """
     Build a generic shell task for unsupported Salt states.
@@ -407,6 +493,169 @@ def _build_generic_task(state: dict[str, Any]) -> dict[str, Any]:
     return task
 
 
+def _salt_manual_review_warnings(
+    content: str, include_asset_warning: bool = True
+) -> list[str]:
+    """Report Salt constructs that are not preserved by conversion."""
+    warnings: list[str] = []
+    if re.search(r"(?m)^\s*include\s*:", content):
+        warnings.append(
+            "Salt include directives are not translated into role dependencies"
+        )
+    if re.search(r"(?m)^\s*-\s*(?:require|watch|require_in|watch_in)\s*:", content):
+        warnings.append(
+            "Salt requisites and watch relationships require manual ordering or handlers"
+        )
+    if re.search(r"{%\s*(?:if|elif|else|for)\b", content):
+        warnings.append(
+            "Salt Jinja conditionals or loops are not translated into Ansible task conditions"
+        )
+    if re.search(r"{%\s*set\b", content):
+        warnings.append(
+            "Salt Jinja set variables are removed; define equivalent Ansible variables"
+        )
+    if include_asset_warning and _SALT_URL_PREFIX in content:
+        warnings.append(
+            "Salt file and template assets are referenced but not copied into the Ansible role"
+        )
+    return warnings
+
+
+def _copy_salt_role_assets(
+    rel_paths: list[str],
+    safe_salt: Any,
+    role_dir: Any,
+    workspace_root: Any,
+    warnings: list[str],
+) -> None:
+    """Copy Salt file/template sources into their Ansible role directories."""
+    references = _collect_salt_asset_references(
+        rel_paths, safe_salt, workspace_root, warnings
+    )
+    for reference in sorted(references):
+        _copy_salt_asset(reference, safe_salt, role_dir, workspace_root, warnings)
+
+
+def _collect_salt_asset_references(
+    rel_paths: list[str], safe_salt: Any, workspace_root: Any, warnings: list[str]
+) -> set[str]:
+    """Collect salt:// references from the role's source SLS files."""
+    references: set[str] = set()
+    for rel_path in rel_paths:
+        try:
+            content = safe_read_text(
+                safe_salt / rel_path, workspace_root, encoding="utf-8"
+            )
+        except OSError as exc:
+            warnings.append(f"Could not inspect assets in {rel_path}: {exc}")
+            continue
+        references.update(re.findall(r"salt://([^\s'\"]+)", content))
+    return references
+
+
+def _copy_salt_asset(
+    reference: str,
+    safe_salt: Any,
+    role_dir: Any,
+    workspace_root: Any,
+    warnings: list[str],
+) -> None:
+    """Validate and stage one Salt asset reference."""
+    asset_path = Path(reference)
+    if asset_path.is_absolute() or ".." in asset_path.parts:
+        warnings.append(f"Unsafe Salt asset path was not copied: {reference}")
+        return
+
+    asset_type = asset_path.parts[0] if asset_path.parts else ""
+    if asset_type not in {"files", "templates"} or len(asset_path.parts) < 2:
+        warnings.append(f"Unsupported Salt asset source was not copied: {reference}")
+        return
+
+    source = _find_salt_asset_source(asset_path, safe_salt)
+    if source is None:
+        warnings.append(f"Salt asset source was not found: {reference}")
+        return
+
+    try:
+        safe_source = _ensure_within_base_path(source, workspace_root)
+        source_rel = Path(*asset_path.parts[1:])
+        destination_root = role_dir / asset_type
+        _copy_salt_asset_files(
+            safe_source,
+            source_rel,
+            destination_root,
+            workspace_root,
+        )
+    except (OSError, ValueError) as exc:
+        warnings.append(f"Could not copy Salt asset {reference}: {exc}")
+
+
+def _find_salt_asset_source(asset_path: Path, safe_salt: Any) -> Path | None:
+    """Find an asset under the Salt root or its sibling assets directory."""
+    candidates = (safe_salt / asset_path, safe_salt.parent / asset_path)
+    return next((candidate for candidate in candidates if candidate.exists()), None)
+
+
+def _copy_salt_asset_files(
+    safe_source: Path,
+    source_rel: Path,
+    destination_root: Any,
+    workspace_root: Any,
+) -> None:
+    """Copy one file or a directory tree under a role's asset root."""
+    safe_mkdir(destination_root, workspace_root, parents=True, exist_ok=True)
+    source_files = (
+        [safe_source]
+        if safe_source.is_file()
+        else sorted(path for path in safe_source.rglob("*") if path.is_file())
+    )
+    for source_file in source_files:
+        safe_file = _ensure_within_base_path(source_file, workspace_root)
+        relative_file = (
+            Path(source_file.name)
+            if safe_source.is_file()
+            else source_file.relative_to(safe_source)
+        )
+        destination_rel = (
+            source_rel if safe_source.is_file() else source_rel / relative_file
+        )
+        destination = destination_root / destination_rel
+        safe_destination = _ensure_within_base_path(destination, workspace_root)
+        safe_mkdir(safe_destination.parent, workspace_root, parents=True, exist_ok=True)
+        safe_destination.write_bytes(safe_file.read_bytes())
+
+
+def _order_roles_from_top(
+    roles_created: list[str],
+    safe_salt: Any,
+    workspace_root: Any,
+    warnings: list[str],
+    parse_sls_yaml: Any,
+    parse_top_environments: Any,
+) -> list[str]:
+    """Order generated roles using state order declared in top.sls."""
+    top_file = safe_salt / _TOP_SLS
+    if not safe_exists(top_file, workspace_root):
+        return roles_created
+
+    try:
+        content = safe_read_text(top_file, workspace_root, encoding="utf-8")
+        environments = parse_top_environments(parse_sls_yaml(content))
+    except (OSError, ValueError) as exc:
+        warnings.append(f"Could not order roles from top.sls: {exc}")
+        return roles_created
+
+    ordered: list[str] = []
+    for targets in environments.values():
+        for state_names in targets.values():
+            for state_name in state_names:
+                role_name = state_name.split(".", 1)[0].split("/", 1)[0]
+                if role_name in roles_created and role_name not in ordered:
+                    ordered.append(role_name)
+    ordered.extend(role for role in roles_created if role not in ordered)
+    return ordered
+
+
 _TASK_BUILDERS = {
     "pkg": _build_pkg_task,
     "file": _build_file_task,
@@ -416,6 +665,8 @@ _TASK_BUILDERS = {
     "group": _build_group_task,
     "git": _build_git_task,
     "pip": _build_pip_task,
+    "pkgrepo": _build_pkgrepo_task,
+    "virtualenv": _build_virtualenv_task,
 }
 
 
@@ -511,6 +762,7 @@ def convert_salt_sls_to_ansible(sls_path: str, playbook_name: str = "") -> str:
     tasks_converted = 0
     tasks_unconverted = 0
     warnings: list[str] = []
+    warnings.extend(_salt_manual_review_warnings(content))
 
     for state in states:
         task = _convert_state_to_task(state)
@@ -577,23 +829,38 @@ def _render_playbook_yaml(
         YAML string representation of the playbook.
 
     """
-    lines: list[str] = []
-    lines.append("---")
-    lines.append(f"- name: Converted from Salt: {name}")
-    lines.append("  hosts: all")
-    lines.append("  become: true")
-
+    play: dict[str, Any] = {
+        "name": f"Converted from Salt: {name}",
+        "hosts": "all",
+        "become": True,
+    }
     if ansible_vars:
-        lines.append("  vars:")
-        for var_name, var_value in ansible_vars.items():
-            lines.append(_render_var_line(var_name, var_value))
-
+        play["vars"] = ansible_vars
     if tasks:
-        lines.append("  tasks:")
-        for task in tasks:
-            _render_task_lines(lines, task)
+        play["tasks"] = _normalise_task_metadata(tasks)
 
-    return "\n".join(lines) + "\n"
+    return "---\n" + yaml.safe_dump(
+        [play], default_flow_style=False, sort_keys=False, allow_unicode=True
+    )
+
+
+def _normalise_task_metadata(tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Normalise scalar task tags to Ansible's list form."""
+    normalised: list[dict[str, Any]] = []
+    for task in tasks:
+        normalised_task = dict(task)
+        tags = normalised_task.get("tags")
+        if tags and not isinstance(tags, list):
+            normalised_task["tags"] = [tags]
+        normalised.append(normalised_task)
+    return normalised
+
+
+def _render_role_task_list(tasks: list[dict[str, Any]]) -> str:
+    """Render task mappings as a valid Ansible role task file."""
+    return "---\n" + yaml.safe_dump(
+        tasks, default_flow_style=False, sort_keys=False, allow_unicode=True
+    )
 
 
 def _render_param_value(lines: list[str], pk: str, pv: Any) -> None:
@@ -971,6 +1238,9 @@ def _collect_role_data(
             continue
 
         states = parse_sls_states(content)
+        warnings.extend(
+            _salt_manual_review_warnings(content, include_asset_warning=False)
+        )
         handlers = _extract_watch_handlers(states)
         pillars = extract_pillars(content)
 
@@ -1037,18 +1307,14 @@ def _write_role_files(
     safe_write_text(
         tasks_file,
         workspace_root,
-        _render_playbook_yaml(role_name, all_tasks, {}),
+        _render_role_task_list(all_tasks),
         encoding="utf-8",
     )
     tasks_rel = str(tasks_file.relative_to(safe_out))
     files_written.append(tasks_rel)
 
     handlers_file = role_handlers_dir / _MAIN_YML
-    handlers_yaml = (
-        _render_playbook_yaml(f"{role_name}_handlers", all_handlers, {})
-        if all_handlers
-        else "---\n# No handlers\n"
-    )
+    handlers_yaml = _render_role_task_list(all_handlers)
     safe_write_text(handlers_file, workspace_root, handlers_yaml, encoding="utf-8")
     handlers_rel = str(handlers_file.relative_to(safe_out))
     files_written.append(handlers_rel)
@@ -1143,7 +1409,7 @@ def _write_inventory_from_top(
         parse_top_environments: Callable that extracts environments from top data.
 
     """
-    candidate = safe_salt / "top.sls"
+    candidate = safe_salt / _TOP_SLS
     if not safe_exists(candidate, workspace_root):
         return
     try:
@@ -1223,6 +1489,8 @@ def convert_salt_directory_to_roles(salt_dir: str, output_dir: str) -> str:
     # Group files by top-level directory (role name)
     role_files: dict[str, list[str]] = {}
     for rel_path in sls_files:
+        if rel_path == _TOP_SLS:
+            continue
         parts = rel_path.split("/")
         role_name = parts[0].replace(".sls", "") if len(parts) == 1 else parts[0]
         role_files.setdefault(role_name, []).append(rel_path)
@@ -1249,9 +1517,24 @@ def convert_salt_directory_to_roles(salt_dir: str, output_dir: str) -> str:
             warnings,
         )
         if file_rels is not None:
+            _copy_salt_role_assets(
+                rel_paths,
+                safe_salt,
+                role_dir,
+                workspace_root,
+                warnings,
+            )
             roles_created.append(role_name)
             structure[role_name] = file_rels
 
+    roles_created[:] = _order_roles_from_top(
+        roles_created,
+        safe_salt,
+        workspace_root,
+        warnings,
+        _parse_sls_yaml,
+        _parse_top_environments,
+    )
     _write_site_yml(safe_out, workspace_root, roles_created, files_written, warnings)
     _write_inventory_from_top(
         safe_salt,

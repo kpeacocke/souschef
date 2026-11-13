@@ -3140,6 +3140,8 @@ def validate_conversion(
     conversion_type: str,
     result_content: str,
     output_format: str = "text",
+    source_type: str = "",
+    source_content: str = "",
 ) -> str:
     """
     Validate converted Ansible content for correctness and best practices.
@@ -3151,12 +3153,20 @@ def validate_conversion(
         conversion_type: Type of conversion (cookbook/recipe/resource/attribute).
         result_content: The converted Ansible content to validate.
         output_format: Output format (text/json/summary).
+        source_type: Optional source language (chef, puppet, or salt).
+        source_content: Optional raw source content for coverage checks.
 
     Returns:
         Validation report in the specified format.
 
     """
-    return _validate_conversion(conversion_type, result_content, output_format)
+    return _validate_conversion(
+        conversion_type,
+        result_content,
+        output_format,
+        source_type,
+        source_content,
+    )
 
 
 # Chef Server Integration Tools
@@ -4356,45 +4366,124 @@ def _convert_recipes(
         )
         return
 
+    converted_handlers: list[dict[str, Any]] = []
     for recipe_file in recipe_files:
         try:
-            validated_recipe = _validated_candidate(recipe_file, recipes_dir)
-            recipe_name = validated_recipe.stem
-
-            # Parse recipe to validate it can be processed
-            parse_result = _parse_recipe(str(validated_recipe))
-            if parse_result.startswith("Error:"):
-                conversion_summary["errors"].append(
-                    f"Failed to parse recipe {recipe_name}: {parse_result}"
+            converted_handlers.extend(
+                _convert_single_recipe(
+                    recipe_file,
+                    recipes_dir,
+                    cookbook_dir.name,
+                    role_dir,
+                    conversion_summary,
+                    generate_playbook_from_recipe,
                 )
-                continue
-
-            # Convert to Ansible tasks
-            playbook_yaml = generate_playbook_from_recipe(str(validated_recipe))
-
-            # Write as task file; _safe_join already enforces containment within role_dir
-            task_file = _safe_join(role_dir, "tasks", f"{recipe_name}.yml")
-            try:
-                safe_mkdir(task_file.parent, role_dir, parents=True, exist_ok=True)
-                safe_write_text(task_file, role_dir, playbook_yaml)
-            except OSError as write_err:
-                conversion_summary["errors"].append(
-                    f"Failed to write task file {task_file.name}: {write_err}"
-                )
-                continue
-
-            conversion_summary["converted_files"].append(
-                {
-                    "type": "task",
-                    "source": f"recipes/{recipe_name}.rb",
-                    "target": f"{role_dir.name}/tasks/{recipe_name}.yml",
-                }
             )
-
         except Exception as e:
             conversion_summary["errors"].append(
                 f"Error converting recipe {recipe_file.name}: {str(e)}"
             )
+
+    if converted_handlers:
+        handlers_file = _safe_join(role_dir, "handlers", _ROLE_MAIN_YML)
+        safe_mkdir(handlers_file.parent, role_dir, parents=True, exist_ok=True)
+        safe_write_text(
+            handlers_file,
+            role_dir,
+            yaml.safe_dump(
+                converted_handlers,
+                default_flow_style=False,
+                sort_keys=False,
+                allow_unicode=True,
+            ),
+        )
+
+
+_ROLE_MAIN_YML = "main.yml"
+
+
+def _convert_single_recipe(
+    recipe_file: Path,
+    recipes_dir: Path,
+    cookbook_name: str,
+    role_dir: Path,
+    conversion_summary: dict,
+    generate_playbook_from_recipe: Any,
+) -> list[dict[str, Any]]:
+    """Convert one Chef recipe into a role task list and return its handlers."""
+    validated_recipe = _validated_candidate(recipe_file, recipes_dir)
+    recipe_name = validated_recipe.stem
+    parse_result = _parse_recipe(str(validated_recipe))
+    if parse_result.startswith("Error:"):
+        conversion_summary["errors"].append(
+            f"Failed to parse recipe {recipe_name}: {parse_result}"
+        )
+        return []
+
+    playbook_yaml = generate_playbook_from_recipe(str(validated_recipe))
+    playbook = yaml.safe_load(playbook_yaml)
+    if (
+        not isinstance(playbook, list)
+        or not playbook
+        or not isinstance(playbook[0], dict)
+    ):
+        raise ValueError(f"Invalid generated playbook for {recipe_name}")
+    play_data = playbook[0]
+    role_tasks = play_data.get("tasks", [])
+    if not isinstance(role_tasks, list):
+        raise ValueError(f"Generated tasks are invalid for {recipe_name}")
+    _rewrite_internal_recipe_includes(role_tasks, cookbook_name)
+
+    task_file = _safe_join(role_dir, "tasks", f"{recipe_name}.yml")
+    safe_mkdir(task_file.parent, role_dir, parents=True, exist_ok=True)
+    try:
+        safe_write_text(
+            task_file,
+            role_dir,
+            yaml.safe_dump(
+                role_tasks,
+                default_flow_style=False,
+                sort_keys=False,
+                allow_unicode=True,
+            ),
+        )
+    except OSError as write_err:
+        conversion_summary["errors"].append(
+            f"Failed to write task file {task_file.name}: {write_err}"
+        )
+        return []
+
+    conversion_summary["converted_files"].append(
+        {
+            "type": "task",
+            "source": f"recipes/{recipe_name}.rb",
+            "target": f"{role_dir.name}/tasks/{recipe_name}.yml",
+        }
+    )
+    handlers = play_data.get("handlers", [])
+    if not isinstance(handlers, list):
+        return []
+    return [handler for handler in handlers if isinstance(handler, dict)]
+
+
+def _rewrite_internal_recipe_includes(
+    tasks: list[dict[str, Any]], cookbook_name: str
+) -> None:
+    """Use local task imports for include_recipe references in this cookbook."""
+    include_role_key = "ansible.builtin.include_role"
+    for task in tasks:
+        task_name = str(task.get("name", ""))
+        prefix = "Include include_recipe "
+        if not task_name.startswith(prefix):
+            continue
+
+        recipe_reference = task_name[len(prefix) :]
+        included_cookbook, separator, recipe_name = recipe_reference.partition("::")
+        if included_cookbook != cookbook_name or not separator or not recipe_name:
+            continue
+
+        task.pop(include_role_key, None)
+        task["ansible.builtin.import_tasks"] = f"{recipe_name.replace('::', '/')}.yml"
 
 
 def _convert_templates(
@@ -4481,6 +4570,7 @@ def _convert_attributes(
 
             # Resolve precedence to get final values
             resolved_attributes = _resolve_attribute_precedence(raw_attributes)
+            from souschef.converters.playbook import _convert_ruby_value_to_yaml
 
             # Convert to Ansible variable format (flatten nested keys)
             ansible_vars = {}
@@ -4488,7 +4578,11 @@ def _convert_attributes(
                 # Convert Chef attribute paths to Ansible variable names
                 # e.g., "nginx.port" becomes "nginx_port"
                 ansible_key = attr_path.replace(".", "_")
-                ansible_vars[ansible_key] = attr_info["value"]
+                value_yaml = _convert_ruby_value_to_yaml(str(attr_info["value"]))
+                try:
+                    ansible_vars[ansible_key] = yaml.safe_load(value_yaml)
+                except yaml.YAMLError:
+                    ansible_vars[ansible_key] = attr_info["value"]
 
             # Write as defaults using _safe_join to prevent path injection
             # All paths are validated via _safe_join to ensure containment within role_defaults_dir
@@ -4522,26 +4616,79 @@ def _create_main_task_file(
     # Build path to tasks directory safely
     tasks_dir: Path = _safe_join(role_dir, "tasks")
     # Build path to main.yml within tasks directory
-    default_task_file: Path = _safe_join(tasks_dir, "main.yml")
+    default_task_file: Path = _safe_join(tasks_dir, _ROLE_MAIN_YML)
     if safe_exists(default_task_file, role_dir):
         return  # Already exists
 
     # Build path to default recipe safely
     recipes_dir: Path = _safe_join(cookbook_dir, "recipes")
     default_recipe: Path = _safe_join(recipes_dir, "default.rb")
-    if not safe_exists(default_recipe, cookbook_dir):
-        return
-
     try:
-        from souschef.converters.playbook import generate_playbook_from_recipe
+        recipe_names = [
+            Path(str(item.get("source", ""))).stem
+            for item in conversion_summary.get("converted_files", [])
+            if item.get("type") == "task" and item.get("source")
+        ]
+        if "default" in recipe_names:
+            recipe_names = ["default"]
+        elif not recipe_names:
+            if not safe_exists(default_recipe, cookbook_dir):
+                return
+            from souschef.converters.playbook import generate_playbook_from_recipe
 
-        playbook_yaml = generate_playbook_from_recipe(str(default_recipe))
+            playbook_yaml = generate_playbook_from_recipe(str(default_recipe))
+            playbook = yaml.safe_load(playbook_yaml)
+            if (
+                not isinstance(playbook, list)
+                or not playbook
+                or not isinstance(playbook[0], dict)
+            ):
+                raise ValueError("Generated playbook is invalid")
+            tasks = playbook[0].get("tasks", [])
+            if not isinstance(tasks, list):
+                raise ValueError("Generated playbook tasks are invalid")
+            safe_mkdir(default_task_file.parent, role_dir, parents=True, exist_ok=True)
+            safe_write_text(
+                default_task_file,
+                role_dir,
+                yaml.safe_dump(
+                    tasks,
+                    default_flow_style=False,
+                    sort_keys=False,
+                    allow_unicode=True,
+                ),
+            )
+            conversion_summary["converted_files"].append(
+                {
+                    "type": "task",
+                    "source": "recipes/default.rb",
+                    "target": f"{role_dir.name}/tasks/main.yml",
+                }
+            )
+            return
+
+        role_tasks = [
+            {
+                "name": f"Run {recipe_name} recipe",
+                "ansible.builtin.import_tasks": f"{recipe_name}.yml",
+            }
+            for recipe_name in recipe_names
+        ]
         safe_mkdir(default_task_file.parent, role_dir, parents=True, exist_ok=True)
-        safe_write_text(default_task_file, role_dir, playbook_yaml)
+        safe_write_text(
+            default_task_file,
+            role_dir,
+            yaml.safe_dump(
+                role_tasks,
+                default_flow_style=False,
+                sort_keys=False,
+                allow_unicode=True,
+            ),
+        )
         conversion_summary["converted_files"].append(
             {
                 "type": "task",
-                "source": "recipes/default.rb",
+                "source": ", ".join(f"recipes/{name}.rb" for name in recipe_names),
                 "target": f"{role_dir.name}/tasks/main.yml",
             }
         )
@@ -4563,7 +4710,7 @@ def _create_role_metadata(
 
     meta_dir = _safe_join(role_dir, "meta")
     safe_mkdir(meta_dir, role_dir, parents=True, exist_ok=True)
-    meta_file = _safe_join(meta_dir, "main.yml")
+    meta_file = _safe_join(meta_dir, _ROLE_MAIN_YML)
 
     meta_content: dict[str, Any] = {
         "galaxy_info": {

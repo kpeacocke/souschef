@@ -40,11 +40,9 @@ Work your way up the pyramid. Never skip steps.
 Validate the conversion from cookbook-name
 ```
 
-Your AI assistant will use the `validate_conversion` tool to:
-- Compare Chef resources vs generated Ansible tasks
-- Identify missing resources or incorrect mappings
-- Flag complex Chef patterns that need manual review
-- Highlight security-sensitive resources (users, SSH keys, credentials)
+When given `source_type` and `source_content`, `validate_conversion` reports recognised source-construct and generated-task counts, and flags explicit unresolved placeholders. This is a coverage signal, not proof of functional equivalence. It does not compare resource properties, guards, or runtime results; those require manual review and execution in a safe environment.
+
+Use the validator to catch syntax and common quality issues, then compare critical resources side by side and run generated playbooks against representative test hosts.
 
 **Manual Review Checklist:**
 

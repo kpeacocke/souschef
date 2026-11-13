@@ -1969,6 +1969,11 @@ def _convert_ruby_value_to_yaml(ruby_value: str) -> str:  # noqa: C901
     # Handle Ruby hash syntax { key => value, ... }
     if ruby_value.startswith("{") and ruby_value.endswith("}"):
         return _convert_ruby_hash_to_yaml(ruby_value)
+    if "=>" in ruby_value and ruby_value.startswith(("'", '"')):
+        fragment = ruby_value.rstrip()
+        if fragment.endswith("}") and fragment.count("}") > fragment.count("{"):
+            fragment = fragment[:-1].rstrip()
+        return _convert_ruby_hash_to_yaml("{" + fragment.rstrip(",") + "}")
 
     # Handle arrays [item1, item2, ...]
     if ruby_value.startswith("[") and ruby_value.endswith("]"):

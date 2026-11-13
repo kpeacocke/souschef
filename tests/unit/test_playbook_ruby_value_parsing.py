@@ -1,5 +1,7 @@
 """Tests for Ruby value parsing helpers in playbook conversion."""
 
+import yaml
+
 from souschef.converters.playbook import (
     _convert_chef_attr_path_to_ansible_var,
     _convert_primitive_value,
@@ -8,6 +10,7 @@ from souschef.converters.playbook import (
     _convert_ruby_value_to_yaml,
     _split_by_commas_with_nesting,
 )
+from souschef.converters.resource import _format_ansible_task
 
 
 def test_convert_primitive_value_quotes_strings() -> None:
@@ -40,6 +43,39 @@ def test_convert_ruby_value_to_yaml_hash() -> None:
 
     assert "key:" in result
     assert "count: 2" in result
+
+
+def test_convert_unbraced_multiline_ruby_hash_fragment() -> None:
+    """Convert multiline Chef hash values returned without outer braces."""
+    value = """\
+'test.cluster.local' => {
+  'document_root' => '/opt/server/test',
+  'ssl_enabled' => true
+},
+'ci.cluster.local' => {
+  'document_root' => '/opt/server/ci',
+  'ssl_enabled' => true
+}
+}"""
+
+    parsed = yaml.safe_load(_convert_ruby_value_to_yaml(value))
+
+    assert parsed["test.cluster.local"]["document_root"] == "/opt/server/test"
+    assert parsed["ci.cluster.local"]["ssl_enabled"] is True
+
+
+def test_format_ansible_task_quotes_colon_in_name() -> None:
+    """Resource names containing colons produce valid task YAML."""
+    task_yaml = _format_ansible_task(
+        {
+            "name": "Unsupported Chef resource: ruby_block fix_redis_config",
+            "ansible.builtin.debug": {"msg": "Manual review required"},
+        }
+    )
+
+    parsed = yaml.safe_load(task_yaml)
+
+    assert parsed[0]["name"] == "Unsupported Chef resource: ruby_block fix_redis_config"
 
 
 def test_convert_ruby_value_to_yaml_array() -> None:

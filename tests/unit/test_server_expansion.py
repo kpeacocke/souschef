@@ -3,10 +3,13 @@
 import json
 from typing import Any
 
+import yaml
+
 from souschef.server import (
     _convert_attributes,
     _convert_recipes,
     _convert_templates,
+    _create_main_task_file,
     convert_all_cookbooks_comprehensive,
     parse_chef_migration_assessment,
 )
@@ -141,6 +144,75 @@ class TestConvertRecipes:
         assert "converted_files" in conversion_summary
         assert "errors" in conversion_summary
         assert "warnings" in conversion_summary
+
+    def test_convert_recipes_writes_role_task_list(self, tmp_path, monkeypatch):
+        """Converted recipe files contain task lists, not whole playbooks."""
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+        cookbook_dir = tmp_path / "cookbook"
+        recipes_dir = cookbook_dir / "recipes"
+        recipes_dir.mkdir(parents=True)
+        (recipes_dir / "default.rb").write_text(
+            "package 'nginx' do\n  action :install\nend\n"
+        )
+        role_dir = tmp_path / "role"
+        (role_dir / "tasks").mkdir(parents=True)
+        summary: dict[str, Any] = {"converted_files": [], "errors": [], "warnings": []}
+
+        _convert_recipes(cookbook_dir, role_dir, summary)
+
+        tasks = yaml.safe_load((role_dir / "tasks/default.yml").read_text())
+        assert isinstance(tasks, list)
+        assert "hosts" not in tasks[0]
+        assert "ansible.builtin.package" in tasks[0]
+
+    def test_convert_recipes_imports_sibling_recipe_files(self, tmp_path, monkeypatch):
+        """Same-cookbook include_recipe resources import local task files."""
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+        cookbook_dir = tmp_path / "nginx-multisite"
+        recipes_dir = cookbook_dir / "recipes"
+        recipes_dir.mkdir(parents=True)
+        (recipes_dir / "default.rb").write_text(
+            "include_recipe 'nginx-multisite::sites'\n"
+        )
+        role_dir = tmp_path / "role"
+        (role_dir / "tasks").mkdir(parents=True)
+        summary: dict[str, Any] = {"converted_files": [], "errors": [], "warnings": []}
+
+        _convert_recipes(cookbook_dir, role_dir, summary)
+
+        tasks = yaml.safe_load((role_dir / "tasks/default.yml").read_text())
+        include_task = tasks[0]
+        assert include_task["ansible.builtin.import_tasks"] == "sites.yml"
+        assert "ansible.builtin.include_role" not in include_task
+
+    def test_create_main_task_file_imports_converted_recipes(self, tmp_path):
+        """Role main tasks import converted recipes in a deterministic order."""
+        cookbook_dir = tmp_path / "cookbook"
+        recipes_dir = cookbook_dir / "recipes"
+        recipes_dir.mkdir(parents=True)
+        (recipes_dir / "default.rb").write_text("package 'nginx'\n")
+        role_dir = tmp_path / "role"
+        tasks_dir = role_dir / "tasks"
+        tasks_dir.mkdir(parents=True)
+        (tasks_dir / "default.yml").write_text("- name: package nginx\n")
+        (tasks_dir / "setup.yml").write_text("- name: setup\n")
+        summary: dict[str, Any] = {
+            "converted_files": [
+                {"type": "task", "source": "recipes/default.rb"},
+                {"type": "task", "source": "recipes/setup.rb"},
+            ],
+            "warnings": [],
+        }
+
+        _create_main_task_file(cookbook_dir, role_dir, summary, include_recipes=True)
+
+        main_tasks = yaml.safe_load((tasks_dir / "main.yml").read_text())
+        assert main_tasks == [
+            {
+                "name": "Run default recipe",
+                "ansible.builtin.import_tasks": "default.yml",
+            }
+        ]
 
     def test_convert_recipes_no_recipes_dir(self, tmp_path):
         """Test conversion when recipes directory doesn't exist."""
@@ -327,6 +399,41 @@ class TestConvertAttributes:
 
         # Attributes conversion should be attempted
         assert isinstance(conversion_summary, dict)
+
+    def test_convert_attributes_nested_hash_to_structured_yaml(self, tmp_path):
+        """Nested Ruby hashes become YAML mappings rather than quoted strings."""
+        cookbook_dir = tmp_path / "cookbook"
+        attributes_dir = cookbook_dir / "attributes"
+        attributes_dir.mkdir(parents=True)
+        (attributes_dir / "default.rb").write_text(
+            """\
+default['nginx']['sites'] = {
+  'test.cluster.local' => {
+    'document_root' => '/opt/server/test',
+    'ssl_enabled' => true
+  },
+  'ci.cluster.local' => {
+    'document_root' => '/opt/server/ci',
+    'ssl_enabled' => true
+  }
+}
+"""
+        )
+        role_dir = tmp_path / "role"
+        (role_dir / "defaults").mkdir(parents=True)
+        summary: dict[str, Any] = {
+            "converted_files": [],
+            "errors": [],
+            "warnings": [],
+        }
+
+        _convert_attributes(cookbook_dir, role_dir, summary)
+
+        defaults = yaml.safe_load((role_dir / "defaults/default.yml").read_text())
+        assert defaults["nginx_sites"]["test.cluster.local"]["document_root"] == (
+            "/opt/server/test"
+        )
+        assert defaults["nginx_sites"]["ci.cluster.local"]["ssl_enabled"] is True
 
     def test_convert_attributes_no_attributes_dir(self, tmp_path):
         """Test conversion when attributes directory doesn't exist."""

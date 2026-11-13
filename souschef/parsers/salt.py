@@ -5,7 +5,7 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from souschef.core.constants import (
     ERROR_FILE_NOT_FOUND,
@@ -41,6 +41,8 @@ SALT_STATE_MODULES = {
     "locale": "locale",
     "host": "host",
     "archive": "archive",
+    "pkgrepo": "package_repository",
+    "virtualenv": "virtual_environment",
 }
 
 # Salt pkg.installed state functions mapped to Ansible equivalents
@@ -86,8 +88,11 @@ SALT_FILE_FUNCTIONS = {
 }
 
 
-def _strip_jinja_markup(content: str) -> str:
-    """Strip Jinja2 blocks and replace expressions with placeholders."""
+def _strip_jinja_markup(
+    content: str, placeholders: dict[str, str] | None = None
+) -> str:
+    """Strip Jinja2 blocks and replace expressions with YAML-safe tokens."""
+    expression_map = placeholders if placeholders is not None else {}
     cleaned: list[str] = []
     i = 0
     length = len(content)
@@ -104,7 +109,9 @@ def _strip_jinja_markup(content: str) -> str:
             end = content.find("}}", i + 2)
             if end == -1:
                 break
-            cleaned.append("'__JINJA2__'")
+            token = f"__SOUSCHEF_JINJA_{len(expression_map)}__"
+            expression_map[token] = content[i : end + 2]
+            cleaned.append(token)
             i = end + 2
             continue
 
@@ -115,6 +122,23 @@ def _strip_jinja_markup(content: str) -> str:
         cleaned.append(content[i:])
 
     return "".join(cleaned)
+
+
+def _restore_jinja_placeholders(value: Any, placeholders: dict[str, str]) -> Any:
+    """Restore Jinja expressions in parsed YAML keys and values."""
+    if isinstance(value, dict):
+        return {
+            _restore_jinja_placeholders(key, placeholders): (
+                _restore_jinja_placeholders(item, placeholders)
+            )
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_restore_jinja_placeholders(item, placeholders) for item in value]
+    if isinstance(value, str):
+        for token, expression in placeholders.items():
+            value = value.replace(token, expression)
+    return value
 
 
 def _parse_sls_yaml(content: str) -> dict[str, Any]:
@@ -136,10 +160,12 @@ def _parse_sls_yaml(content: str) -> dict[str, Any]:
 
         # Strip Jinja2 syntax with a deterministic parser to avoid regex
         # backtracking on adversarial inputs (CWE-1333).
-        clean = _strip_jinja_markup(content)
+        placeholders: dict[str, str] = {}
+        clean = _strip_jinja_markup(content, placeholders)
         result = yaml_module.safe_load(clean)
         if isinstance(result, dict):
-            return result
+            restored = _restore_jinja_placeholders(result, placeholders)
+            return cast(dict[str, Any], restored)
         return {}
     except Exception:  # noqa: BLE001
         return {}

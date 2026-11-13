@@ -763,26 +763,26 @@ Generate a comprehensive migration report.
 
 ### validate_conversion
 
-Validate converted Ansible code against original Chef code.
+Validate generated Ansible syntax and best practices, with optional source-coverage checks.
 
-**What it does**: Compares your converted Ansible playbook/role with the original Chef recipe to verify they're functionally equivalent. Checks that all resources were converted, properties are correct, guard conditions are preserved, and nothing was missed or misinterpreted.
+**What it does**: Checks generated Ansible content for syntax and common quality issues. When `source_type` and `source_content` are supplied, it compares the number of recognised source constructs with generated tasks and detects explicit manual-conversion placeholders.
 
-**Why you need this**: Automated conversion is fast but needs validation. This tool catches mistakes like: forgetting to convert a guard condition, using wrong Ansible module parameters, missing template variables, or incorrect action mappings. It's your quality assurance for conversion accuracy.
+**Important**: Source-coverage checks are a review signal, not proof of semantic equivalence. They do not verify property mappings, guards, runtime behaviour, or target-host results. Always review and test the output before deployment.
 
 **What you get**:
-- Line-by-line comparison of Chef vs Ansible
-- List of any missing or incorrectly converted resources
-- Property/parameter mapping verification
-- Guard condition translation checks
-- Overall conversion accuracy percentage
-- Specific suggestions for fixing issues found
+- YAML/Jinja2 syntax and best-practice findings
+- Recognised source construct and generated task counts when source is provided
+- Warnings for task-count shortfalls and explicit unresolved placeholders
+- A JSON readiness status of `coverage_checked`, `needs_review`, or `coverage_unavailable`
 
-**Real-world example**: Validation reveals: 18 of 20 Chef resources correctly converted, but 2 issues: (1) Chef's `not_if` guard on package resource missing equivalent Ansible `when` condition, (2) Template variable `node['app']['port']` not mapped to `{{ app_port }}`. You can now fix these specific issues.
+**Real-world example**: If a Puppet source contains 20 recognised resources and generated output has 18 tasks, the readiness result is `needs_review`. This does not identify which two resources are missing; use the parser report and manual comparison to locate them.
 
 **Parameters:****
 - `conversion_type` (string, required): Type of conversion ('recipe_to_playbook', 'databag_to_vars', etc.)
 - `result_content` (string, required): The converted Ansible content
 - `output_format` (string, optional, default: "text"): Output format ('text', 'json', or 'yaml')
+- `source_type` (string, optional): Source language for coverage checks (`chef`, `puppet`, or `salt`)
+- `source_content` (string, optional): Raw source recipe, manifest, or SLS content
 
 **Returns:**
 - Validation report with any issues or suggestions
@@ -791,8 +791,8 @@ Validate converted Ansible code against original Chef code.
 
 === "MCP (AI Assistant)"
     ```
-    Validate this converted Ansible playbook against the original
-    Chef recipe to ensure accuracy
+    Validate this converted Ansible playbook and compare task coverage
+    with the original Chef recipe
     ```
 
 ---

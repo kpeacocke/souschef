@@ -36,6 +36,7 @@ from souschef.core.path_utils import (
 )
 from souschef.core.url_validation import validate_user_provided_url
 from souschef.core.validation import (
+    ValidationCategory,
     ValidationEngine,
     ValidationLevel,
     ValidationResult,
@@ -718,6 +719,8 @@ def validate_conversion(
     conversion_type: str,
     result_content: str,
     output_format: str = "text",
+    source_type: str = "",
+    source_content: str = "",
 ) -> str:
     """
     Validate a Chef-to-Ansible conversion for correctness, best practices, and quality.
@@ -734,6 +737,8 @@ def validate_conversion(
             ('resource', 'recipe', 'template', 'inspec')
         result_content: Converted Ansible code or configuration
         output_format: Output format ('text', 'json', 'summary')
+        source_type: Optional source language ('chef', 'puppet', or 'salt').
+        source_content: Optional raw source content for coverage checks.
 
     Returns:
         Validation report with errors, warnings, and suggestions
@@ -742,16 +747,21 @@ def validate_conversion(
     try:
         engine = ValidationEngine()
         results = engine.validate_conversion(conversion_type, result_content)
+        readiness = None
+        if source_content and source_type:
+            readiness = _validate_source_coverage(
+                source_type, source_content, result_content, results
+            )
         summary = engine.get_summary()
 
         if output_format == "json":
-            return json.dumps(
-                {
-                    "summary": summary,
-                    "results": [result.to_dict() for result in results],
-                },
-                indent=2,
-            )
+            response: dict[str, Any] = {
+                "summary": summary,
+                "results": [result.to_dict() for result in results],
+            }
+            if readiness is not None:
+                response["readiness"] = readiness
+            return json.dumps(response, indent=2)
         elif output_format == "summary":
             return _format_validation_results_summary(conversion_type, summary)
         else:
@@ -761,6 +771,147 @@ def validate_conversion(
         return format_error_with_context(
             e, f"validating Ansible {conversion_type} conversion"
         )
+
+
+def _validate_source_coverage(
+    source_type: str,
+    source_content: str,
+    result_content: str,
+    results: list[ValidationResult],
+) -> dict[str, Any]:
+    """Compare recognised source constructs with generated task coverage."""
+    normalised_type = source_type.lower()
+    if normalised_type in {"chef", "recipe"}:
+        from souschef.parsers.recipe import _extract_resources
+
+        source_constructs = len(_extract_resources(source_content))
+        normalised_type = "chef"
+    elif normalised_type in {"puppet", "manifest"}:
+        from souschef.parsers.puppet import _extract_puppet_resources
+
+        source_constructs = len(_extract_puppet_resources(source_content, "<source>"))
+        normalised_type = "puppet"
+    elif normalised_type in {"salt", "sls"}:
+        from souschef.parsers.salt import _parse_sls_states
+
+        source_constructs = len(_parse_sls_states(source_content))
+        normalised_type = "salt"
+    else:
+        results.append(
+            ValidationResult(
+                ValidationLevel.INFO,
+                ValidationCategory.SEMANTIC,
+                f"Source coverage is unavailable for source type: {source_type}",
+            )
+        )
+        return {"status": "coverage_unavailable", "source_type": source_type}
+
+    generated_tasks, unresolved_placeholders = _inspect_ansible_tasks(result_content)
+    status = "coverage_checked"
+
+    if source_constructs == 0:
+        status = "needs_review"
+        results.append(
+            ValidationResult(
+                ValidationLevel.WARNING,
+                ValidationCategory.SEMANTIC,
+                "No source constructs were recognised; coverage could not be established",
+                suggestion="Review the source parser output and compare the migration manually",
+            )
+        )
+    elif generated_tasks < source_constructs:
+        status = "needs_review"
+        results.append(
+            ValidationResult(
+                ValidationLevel.WARNING,
+                ValidationCategory.SEMANTIC,
+                f"Source contains {source_constructs} recognised constructs but output has "
+                f"fewer tasks ({generated_tasks}) than source constructs",
+                suggestion="Review missing source constructs and generated task coverage",
+            )
+        )
+
+    if unresolved_placeholders:
+        status = "needs_review"
+        results.append(
+            ValidationResult(
+                ValidationLevel.WARNING,
+                ValidationCategory.SEMANTIC,
+                f"Output contains {unresolved_placeholders} unresolved conversion placeholder(s)",
+                suggestion="Resolve manual-conversion tasks before deployment",
+            )
+        )
+
+    return {
+        "status": status,
+        "source_type": normalised_type,
+        "source_constructs": source_constructs,
+        "generated_tasks": generated_tasks,
+        "unresolved_placeholders": unresolved_placeholders,
+    }
+
+
+def _inspect_ansible_tasks(result_content: str) -> tuple[int, int]:
+    """Count generated Ansible tasks and explicit manual-conversion markers."""
+    import yaml
+
+    try:
+        document = yaml.safe_load(result_content)
+    except yaml.YAMLError:
+        return 0, 0
+
+    tasks = _find_ansible_tasks(document)
+    markers = ("_unconverted", "manual migration required", "todo:")
+    unresolved = sum(
+        1 for task in tasks if any(marker in str(task).lower() for marker in markers)
+    )
+    return len(tasks), unresolved
+
+
+def _find_ansible_tasks(value: Any) -> list[dict[str, Any]]:
+    """Find task mappings in playbooks and task-list conversion outputs."""
+    if isinstance(value, list):
+        return _find_ansible_tasks_in_sequence(value)
+
+    if isinstance(value, dict):
+        return _find_ansible_tasks_in_mapping(value)
+    return []
+
+
+def _find_ansible_tasks_in_mapping(value: dict[str, Any]) -> list[dict[str, Any]]:
+    """Collect tasks from a play or nested mapping while excluding handlers."""
+    tasks: list[dict[str, Any]] = []
+    for key, child in value.items():
+        if key == "handlers":
+            continue
+        if key == "tasks" and isinstance(child, list):
+            tasks.extend(_collect_task_mappings(child))
+        else:
+            tasks.extend(_find_ansible_tasks(child))
+    return tasks
+
+
+def _find_ansible_tasks_in_sequence(value: list[Any]) -> list[dict[str, Any]]:
+    """Collect direct task lists or recurse through a YAML sequence."""
+    if value and all(_is_ansible_task(item) for item in value):
+        return _collect_task_mappings(value)
+    return [task for item in value for task in _find_ansible_tasks(item)]
+
+
+def _collect_task_mappings(value: list[Any]) -> list[dict[str, Any]]:
+    """Collect task mappings and nested block, rescue, or always tasks."""
+    tasks = [item for item in value if isinstance(item, dict)]
+    for task in list(tasks):
+        for key in ("block", "rescue", "always"):
+            tasks.extend(_find_ansible_tasks(task.get(key)))
+    return tasks
+
+
+def _is_ansible_task(value: Any) -> bool:
+    """Return whether a mapping resembles an Ansible task."""
+    return isinstance(value, dict) and any(
+        str(key).startswith("ansible.") for key in value
+    )
 
 
 # Private helper functions for assessment

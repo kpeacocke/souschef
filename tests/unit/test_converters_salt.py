@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
+import yaml
+
 from souschef.converters.salt import (
     _build_cmd_task,
     _build_file_task,
@@ -109,6 +111,27 @@ def test_build_file_task_managed() -> None:
     assert params["src"] == "nginx/nginx.conf"
     assert params["owner"] == "root"
     assert params["mode"] == "0644"
+
+
+def test_build_file_task_recurse_uses_role_relative_source() -> None:
+    """file.recurse uses Ansible role files-relative source paths."""
+    state = {
+        "id": "/opt/app/static",
+        "module": "file",
+        "function": "recurse",
+        "args": {
+            "source": "salt://files/app/static",
+            "user": "app",
+            "file_mode": "0644",
+            "dir_mode": "0755",
+        },
+    }
+
+    task = _convert_state_to_task(state)
+
+    assert task["ansible.builtin.copy"]["src"] == "app/static"
+    assert task["ansible.builtin.copy"]["dest"] == "/opt/app/static"
+    assert task["ansible.builtin.copy"]["directory_mode"] == "0755"
 
 
 def test_build_file_task_directory() -> None:
@@ -543,6 +566,49 @@ def test_build_pip_task_installed() -> None:
     assert task["ansible.builtin.pip"]["name"] == "flask"
 
 
+def test_convert_pkgrepo_managed_state() -> None:
+    """Salt APT repository state maps to an Ansible repository task."""
+    state = {
+        "id": "postgresql_repository",
+        "module": "pkgrepo",
+        "function": "managed",
+        "args": {
+            "name": "deb http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main",
+            "key_url": "https://www.postgresql.org/media/keys/ACCC4CF8.asc",
+        },
+    }
+
+    task = _convert_state_to_task(state)
+
+    assert task["ansible.builtin.apt_repository"]["repo"] == state["args"]["name"]
+    assert task["ansible.builtin.apt_repository"]["key"] == state["args"]["key_url"]
+    assert "salt_unconverted" not in task.get("tags", [])
+
+
+def test_convert_virtualenv_managed_state() -> None:
+    """Salt virtualenv state maps to idempotent venv creation."""
+    state = {
+        "id": "{{ app_dir }}/venv",
+        "module": "virtualenv",
+        "function": "managed",
+        "args": {"python": "/usr/bin/python3", "user": "app_user"},
+    }
+
+    task = _convert_state_to_task(state)
+
+    assert task["ansible.builtin.command"]["argv"] == [
+        "/usr/bin/python3",
+        "-m",
+        "venv",
+        "{{ app_dir }}/venv",
+    ]
+    assert (
+        task["ansible.builtin.command"]["creates"] == "{{ app_dir }}/venv/bin/activate"
+    )
+    assert task["become_user"] == "app_user"
+    assert "salt_unconverted" not in task.get("tags", [])
+
+
 def test_build_pip_task_with_virtualenv() -> None:
     """pip.installed with bin_env sets virtualenv."""
     state = {
@@ -687,10 +753,11 @@ def test_render_playbook_yaml_with_vars() -> None:
 
 
 def test_render_playbook_yaml_with_jinja2_var() -> None:
-    """Jinja2 placeholder vars are rendered without quotes."""
+    """Jinja2 placeholder vars remain intact in valid YAML."""
     vars_dict = {"mykey": "{{ mykey }}"}
     yaml_out = _render_playbook_yaml("test", [], vars_dict)
-    assert "mykey: {{ mykey }}" in yaml_out
+    parsed = yaml.safe_load(yaml_out)
+    assert parsed[0]["vars"]["mykey"] == "{{ mykey }}"
 
 
 def test_render_playbook_yaml_with_none_var() -> None:
@@ -968,7 +1035,8 @@ def test_render_playbook_yaml_with_non_list_tags() -> None:
         }
     ]
     yaml_out = _render_playbook_yaml("test", tasks, {})
-    assert "tags: [my_tag]" in yaml_out
+    parsed = yaml.safe_load(yaml_out)
+    assert parsed[0]["tasks"][0]["tags"] == ["my_tag"]
 
 
 def test_render_playbook_yaml_task_with_non_dict_module() -> None:

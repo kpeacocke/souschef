@@ -433,7 +433,11 @@ def _format_ansible_task(task: dict[str, Any]) -> str:
         YAML-formatted string.
 
     """
-    result = ["- name: " + task["name"]]
+    task_name = str(task["name"])
+    unsafe_prefixes = ("-", "?", ":", "#", "[", "]", "{", "}")
+    if ":" in task_name or task_name.startswith(unsafe_prefixes):
+        task_name = json.dumps(task_name, ensure_ascii=False)
+    result = [f"- name: {task_name}"]
 
     for key, value in task.items():
         if key == "name":

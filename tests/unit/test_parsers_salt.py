@@ -46,6 +46,28 @@ def test_parse_sls_yaml_replaces_jinja_expressions() -> None:
     assert "name" in result
 
 
+def test_parse_sls_states_preserves_dynamic_jinja_values() -> None:
+    """Salt Jinja expressions survive parsing for later Ansible conversion."""
+    content = """\
+{% set app_user = pillar['app']['user']['name'] %}
+{% set app_home = pillar['app']['user']['home'] %}
+{% set app_dir = app_home + '/app' %}
+{{ app_dir }}/config/settings.py:
+  file.managed:
+    - source: salt://templates/app_config.py.jinja
+    - user: {{ app_user }}
+    - group: {{ pillar['app']['user']['group'] }}
+    - mode: 640
+"""
+
+    states = _parse_sls_states(content)
+
+    assert len(states) == 1
+    assert states[0]["id"] == "{{ app_dir }}/config/settings.py"
+    assert states[0]["args"]["user"] == "{{ app_user }}"
+    assert states[0]["args"]["group"] == "{{ pillar['app']['user']['group'] }}"
+
+
 def test_parse_sls_yaml_invalid_returns_empty() -> None:
     """Invalid YAML returns an empty dict."""
     content = "{{{{ totally: invalid: yaml"

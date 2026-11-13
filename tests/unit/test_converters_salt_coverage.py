@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
+import yaml
+
 # ---------------------------------------------------------------------------
 # _extract_group_name_from_grain
 # ---------------------------------------------------------------------------
@@ -828,3 +830,102 @@ def test_convert_salt_directory_to_roles_with_top_sls(tmp_path: Path) -> None:
 
     result = json.loads(convert_salt_directory_to_roles(str(salt_dir), str(out_dir)))
     assert "inventory/hosts" in result.get("files_written", [])
+    assert "top" not in result.get("roles_created", [])
+    assert result.get("roles_created") == ["nginx"]
+
+
+def test_convert_salt_directory_orders_roles_from_top_sls(tmp_path: Path) -> None:
+    """Generated site.yml follows the state order declared in top.sls."""
+    salt_dir = tmp_path / "salt"
+    salt_dir.mkdir()
+    (salt_dir / "top.sls").write_text(
+        "base:\n  '*':\n    - users\n    - postgresql\n    - application\n"
+    )
+    for role in ("application", "postgresql", "users"):
+        (salt_dir / f"{role}.sls").write_text(
+            f"{role}:\n  pkg.installed:\n    - name: {role}\n"
+        )
+    out_dir = tmp_path / "out"
+
+    from souschef.converters.salt import convert_salt_directory_to_roles
+
+    result = json.loads(convert_salt_directory_to_roles(str(salt_dir), str(out_dir)))
+    site = (out_dir / "site.yml").read_text()
+
+    assert result["roles_created"] == ["users", "postgresql", "application"]
+    assert site.index("Apply users role") < site.index("Apply postgresql role")
+    assert site.index("Apply postgresql role") < site.index("Apply application role")
+
+
+def test_convert_salt_sls_reports_dropped_constructs(tmp_path: Path) -> None:
+    """Ignored Salt control flow, requisites, includes, and assets are reported."""
+    sls_file = tmp_path / "app.sls"
+    sls_file.write_text(
+        """\
+{% if grains['os_family'] == 'Debian' %}
+include:
+  - users
+app_config:
+  file.managed:
+    - name: /etc/app.conf
+    - source: salt://templates/app.conf.jinja
+    - require:
+      - pkg: app_packages
+{% endif %}
+"""
+    )
+
+    from souschef.converters.salt import convert_salt_sls_to_ansible
+
+    result = json.loads(convert_salt_sls_to_ansible(str(sls_file)))
+
+    assert any("conditional" in warning.lower() for warning in result["warnings"])
+    assert any("requisite" in warning.lower() for warning in result["warnings"])
+    assert any("include" in warning.lower() for warning in result["warnings"])
+    assert any("asset" in warning.lower() for warning in result["warnings"])
+
+
+def test_convert_salt_directory_stages_template_and_file_assets(tmp_path: Path) -> None:
+    """Salt templates and static file trees are copied into role assets."""
+    salt_dir = tmp_path / "salt"
+    salt_dir.mkdir()
+    (salt_dir / "app.sls").write_text(
+        """\
+app_config:
+  file.managed:
+    - name: /etc/app.conf
+    - source: salt://templates/app.conf.jinja
+app_static:
+  file.recurse:
+    - name: /opt/app/static
+    - source: salt://files/app/static
+"""
+    )
+    templates_dir = tmp_path / "templates"
+    templates_dir.mkdir()
+    (templates_dir / "app.conf.jinja").write_text("port={{ app_port }}\n")
+    static_dir = tmp_path / "files" / "app" / "static"
+    static_dir.mkdir(parents=True)
+    (static_dir / "index.html").write_text("hello\n")
+    out_dir = tmp_path / "out"
+
+    from souschef.converters.salt import convert_salt_directory_to_roles
+
+    result = json.loads(convert_salt_directory_to_roles(str(salt_dir), str(out_dir)))
+    role_dir = out_dir / "roles" / "app"
+    tasks = yaml.safe_load((role_dir / "tasks/main.yml").read_text())
+    by_name = {task["name"]: task for task in tasks}
+
+    assert (
+        by_name["Manage file: app_config"]["ansible.builtin.template"]["src"]
+        == "app.conf.jinja"
+    )
+    assert (
+        by_name["Manage file: app_static"]["ansible.builtin.copy"]["src"]
+        == "app/static"
+    )
+    assert (
+        role_dir / "templates/app.conf.jinja"
+    ).read_text() == "port={{ app_port }}\n"
+    assert (role_dir / "files/app/static/index.html").read_text() == "hello\n"
+    assert not any("asset" in warning.lower() for warning in result["warnings"])

@@ -187,7 +187,22 @@ def convert_puppet_module_to_ansible(module_path: str) -> str:
 
         manifests = sorted(safe_dir.rglob("*.pp"))
         if not manifests:
-            return f"Warning: No Puppet manifests (.pp files) found in {module_path}"
+            return _generate_puppet_playbook(
+                {
+                    "resources": [],
+                    "classes": [],
+                    "variables": [],
+                    "unsupported": [
+                        {
+                            "construct": "No Puppet manifests found",
+                            "text": f"No .pp files found in {module_path}",
+                            "source_file": module_path,
+                            "line": 1,
+                        }
+                    ],
+                },
+                module_path,
+            )
 
         all_resources: list[dict[str, Any]] = []
         all_unsupported: list[dict[str, Any]] = []
@@ -285,6 +300,7 @@ def _generate_puppet_playbook(parsed: dict[str, Any], source: str) -> str:
                         f"— {item['text']!r}"
                     ),
                 },
+                "tags": ["puppet_unconverted"],
             }
         )
 
@@ -303,6 +319,7 @@ def _generate_puppet_playbook(parsed: dict[str, Any], source: str) -> str:
                 _ANSIBLE_DEBUG_MODULE: {
                     "msg": f"No Puppet resources were found in {source}"
                 },
+                "tags": ["puppet_unconverted"],
             }
         ]
 

@@ -65,6 +65,10 @@ SousChef supports conversion of the following 18 Salt state modules:
 | `locale` | `community.general.locale_gen` |
 | `host` | `ansible.builtin.lineinfile` (hosts entries) |
 | `archive` | `ansible.builtin.unarchive` |
+| `pkgrepo.managed` | `ansible.builtin.apt_repository` |
+| `virtualenv.managed` | `ansible.builtin.command` |
+
+Directory conversion uses `top.sls` state order for the generated `site.yml`. Warnings are emitted when includes, requisites, Jinja control flow or assignments, or `salt://` assets are not represented in the Ansible output. Referenced files and templates must still be staged into the generated role before deployment.
 
 ---
 

@@ -497,9 +497,12 @@ def test_convert_module_to_ansible(tmp_path: Path) -> None:
 
 
 def test_convert_module_no_manifests(tmp_path: Path) -> None:
-    """Test that a directory without .pp files returns a warning."""
+    """Test that a directory without manifests returns a tagged YAML warning."""
     result = convert_puppet_module_to_ansible(str(tmp_path))
-    assert "Warning" in result or "No Puppet manifests" in result
+    playbook = yaml.safe_load(result)
+    warning_task = playbook[0]["tasks"][0]
+    assert "No Puppet manifests" in warning_task["name"]
+    assert "puppet_unconverted" in warning_task["tags"]
 
 
 def test_convert_module_not_found(tmp_path: Path) -> None:
@@ -758,6 +761,7 @@ def test_generate_playbook_with_unsupported() -> None:
     tasks = playbook[0]["tasks"]
     warning_tasks = [t for t in tasks if "WARNING" in t.get("name", "")]
     assert len(warning_tasks) >= 1
+    assert "puppet_unconverted" in warning_tasks[0].get("tags", [])
 
 
 def test_generate_playbook_empty_resources() -> None:
