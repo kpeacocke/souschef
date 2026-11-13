@@ -3,6 +3,15 @@
 ## Overview
 This devcontainer environment mounts the host's Docker socket to enable Docker operations within the container. However, the Docker socket has restrictive permissions by default that prevent the `vscode` user from accessing it.
 
+The devcontainer also installs the CodeQL and SonarQube for IDE extensions.
+SonarQube uses the Java 21 runtime installed by the devcontainer Java feature.
+After changing the devcontainer configuration, rebuild the container to apply
+the extension and runtime settings. If SonarQube still cannot start, check for a
+workspace or folder `sonarlint.ls.javaHome` setting overriding the devcontainer
+setting; it must point to a Java home directory, not the `java` executable.
+The CodeQL CLI is installed in the container only on x86-64; CodeQL analysis on
+ARM64 remains available through GitHub Actions.
+
 ## Accessing Services from Devcontainer
 
 When running containers via `docker compose` from within the devcontainer, they are accessible in different ways depending on your location:

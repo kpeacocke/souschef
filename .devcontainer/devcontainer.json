@@ -82,6 +82,9 @@
                 "ruff.lint.enable": true,
                 "ruff.organizeImports": true,
 
+                // SonarQube for IDE requires a Java home directory, not the executable
+                "sonarlint.ls.javaHome": "/usr/local/sdkman/candidates/java/current",
+
                 // Editor settings
                 "files.eol": "\n",
                 "files.insertFinalNewline": true,
@@ -114,6 +117,7 @@
                 "ms-python.vscode-pylance",
                 "charliermarsh.ruff",
                 "GitHub.copilot-chat",
+                "GitHub.vscode-codeql",
                 "editorconfig.editorconfig",
                 "redhat.vscode-yaml",
                 "Shopify.ruby-lsp",
