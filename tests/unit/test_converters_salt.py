@@ -16,9 +16,13 @@ from souschef.converters.salt import (
     _build_pkg_task,
     _build_service_task,
     _build_user_task,
+    _convert_salt_states_to_tasks,
     _convert_state_to_task,
+    _extract_jinja_set_vars,
+    _load_salt_pillar_data,
     _pillar_to_ansible_vars,
     _render_playbook_yaml,
+    _translate_salt_jinja,
     convert_salt_sls_to_ansible,
 )
 
@@ -358,6 +362,47 @@ def test_build_service_task_unknown_function() -> None:
     assert params["state"] == "started"
 
 
+def test_convert_salt_states_orders_requisites_and_routes_watch_notifications() -> None:
+    """Salt require/watch relationships map to order and Ansible handlers."""
+    states = [
+        {
+            "id": "web_service",
+            "module": "service",
+            "function": "running",
+            "args": {
+                "name": "nginx",
+                "require": [{"pkg": "nginx_package"}],
+                "watch": [{"file": "nginx_config"}],
+            },
+        },
+        {
+            "id": "nginx_config",
+            "module": "file",
+            "function": "managed",
+            "args": {"name": "/etc/nginx/nginx.conf"},
+        },
+        {
+            "id": "nginx_package",
+            "module": "pkg",
+            "function": "installed",
+            "args": {"name": "nginx"},
+        },
+    ]
+
+    tasks, handlers, warnings = _convert_salt_states_to_tasks(states)
+
+    task_names = [task["name"] for task in tasks]
+    assert task_names.index("Manage package: nginx_package") < task_names.index(
+        "Manage service: web_service"
+    )
+    config_task = next(
+        task for task in tasks if task["name"] == "Manage file: nginx_config"
+    )
+    assert config_task["notify"] == ["Restart nginx"]
+    assert handlers[0]["name"] == "Restart nginx"
+    assert warnings == []
+
+
 # ---------------------------------------------------------------------------
 # _build_cmd_task
 # ---------------------------------------------------------------------------
@@ -621,6 +666,46 @@ def test_build_pip_task_with_virtualenv() -> None:
     assert task["ansible.builtin.pip"]["virtualenv"] == "/opt/venv"
 
 
+def test_convert_pip_requirements_state_stages_requirements_file() -> None:
+    """Salt pip requirements are copied to the target before pip runs."""
+    state = {
+        "id": "app_dependencies",
+        "module": "pip",
+        "function": "installed",
+        "args": {
+            "requirements": "salt://files/app/requirements.txt",
+            "bin_env": "{{ app_dir }}/venv",
+            "user": "{{ app_user }}",
+        },
+    }
+
+    tasks, _, warnings = _convert_salt_states_to_tasks([state])
+
+    assert tasks[0]["ansible.builtin.tempfile"]["state"] == "file"
+    register = tasks[0]["register"]
+    assert tasks[1]["ansible.builtin.copy"]["src"] == "app/requirements.txt"
+    assert tasks[1]["ansible.builtin.copy"]["dest"] == f"{{{{ {register}.path }}}}"
+    assert (
+        tasks[2]["ansible.builtin.pip"]["requirements"] == f"{{{{ {register}.path }}}}"
+    )
+    assert tasks[2]["become_user"] == "{{ app_user }}"
+    assert warnings == []
+
+
+def test_convert_state_rewrites_nested_pillar_task_values() -> None:
+    """Task arguments with nested Pillar access use generated Ansible vars."""
+    state = {
+        "id": "app_dir",
+        "module": "file",
+        "function": "directory",
+        "args": {"user": "{{ pillar['app']['user']['name'] }}"},
+    }
+
+    task = _convert_state_to_task(state)
+
+    assert task["ansible.builtin.file"]["owner"] == "{{ app_user_name }}"
+
+
 def test_build_pip_task_removed() -> None:
     """pip.removed creates pip task with state=absent."""
     state = {
@@ -713,6 +798,64 @@ def test_pillar_to_ansible_vars_none_default_becomes_placeholder() -> None:
 def test_pillar_to_ansible_vars_empty() -> None:
     """Empty pillar dict returns empty vars dict."""
     assert _pillar_to_ansible_vars({}) == {}
+
+
+def test_pillar_to_ansible_vars_resolves_nested_data_and_vaults_secrets() -> None:
+    """Nested Pillar values resolve while secret data is externalized."""
+    provenance = {
+        "app.user.name": {"default": None},
+        "app.config.secret_key": {"default": None},
+    }
+    data = {
+        "app": {
+            "user": {"name": "appuser"},
+            "config": {"secret_key": "do-not-copy"},
+        }
+    }
+
+    result = _pillar_to_ansible_vars(provenance, data)
+
+    assert result["app_user_name"] == "appuser"
+    assert result["app_config_secret_key"] == "{{ vault_app_config_secret_key }}"
+
+
+def test_extract_jinja_set_vars_resolves_pillar_aliases() -> None:
+    """Salt set aliases become Ansible variable expressions."""
+    content = """\
+{% set app_user = pillar['app']['user']['name'] %}
+{% set app_home = pillar['app']['user']['home'] %}
+{% set app_dir = app_home + '/app' %}
+"""
+
+    assert _extract_jinja_set_vars(content) == {
+        "app_user": "{{ app_user_name }}",
+        "app_home": "{{ app_user_home }}",
+        "app_dir": "{{ app_home }}/app",
+    }
+
+
+def test_translate_salt_jinja_rewrites_pillar_and_grains() -> None:
+    """Salt template references become Ansible vars and facts."""
+    translated = _translate_salt_jinja(
+        "{{ pillar['app']['user']['name'] }} {{ grains['os_family'] }}"
+    )
+    assert translated == "{{ app_user_name }} {{ ansible_facts['os_family'] }}"
+
+
+def test_load_salt_pillar_data_merges_sls_values(tmp_path: Path) -> None:
+    """Pillar SLS values are loaded from the sibling pillar tree."""
+    salt_root = tmp_path / "salt"
+    salt_root.mkdir()
+    pillar_root = tmp_path / "pillar"
+    pillar_root.mkdir()
+    (pillar_root / "app.sls").write_text(
+        "app:\n  user:\n    name: appuser\n    password: do-not-copy\n"
+    )
+
+    result = _load_salt_pillar_data(salt_root, tmp_path)
+
+    assert result["app"]["user"]["name"] == "appuser"
+    assert result["app"]["user"]["password"] == "do-not-copy"
 
 
 def test_pillar_to_ansible_vars_special_chars_in_key() -> None:

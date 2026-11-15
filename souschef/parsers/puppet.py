@@ -67,6 +67,8 @@ UNSUPPORTED_CONSTRUCTS = [
     (re.compile(r"\brealize\b"), "Virtual resource realization"),
     (re.compile(r"\bcollect\b.*<\|"), "Resource collection expression"),
     (re.compile(r"@@\w+\s*\{"), "Exported resource"),
+    (re.compile(r"\bpuppetdb_query\s*\("), "PuppetDB query"),
+    (re.compile(r"\b(?:include|contain)\s+(?:::)?[\w:]+"), "Class orchestration"),
 ]
 
 
@@ -222,6 +224,7 @@ def _parse_manifest_content(content: str, source_path: str) -> dict[str, Any]:
     variables = _extract_puppet_variables(content, source_path)
     facts = _extract_puppet_facts(content, source_path)
     templates = _extract_puppet_templates(content, source_path)
+    realizations = _extract_virtual_realizations(content, source_path)
     unsupported = _detect_unsupported_constructs(content, source_path)
     return {
         "resources": resources,
@@ -229,6 +232,7 @@ def _parse_manifest_content(content: str, source_path: str) -> dict[str, Any]:
         "variables": variables,
         "facts": facts,
         "templates": templates,
+        "realized_resources": realizations,
         "unsupported": unsupported,
     }
 
@@ -252,11 +256,11 @@ def _extract_puppet_resources(content: str, source_path: str) -> list[dict[str, 
     """
     resources: list[dict[str, Any]] = []
 
-    # Pattern: resource_type { 'title': attributes }
+    # Pattern: resource_type { 'title': attributes }, including virtual declarations.
     # Also handles arrays: resource_type { ['a', 'b']: ... }
     resource_pattern = re.compile(
-        r"(\w+)\s*\{[\s\n]*"  # resource_type {
-        r"((?:\'[^\']*\'|\"[^\"]*\"|\[[^\]]*\]))"  # 'title' or ['t1', 't2']
+        r"(@@?)?(\w+)\s*\{[\s\n]*"  # optional virtual marker and resource_type
+        r"((?:\'[^\']*\'|\"[^\"]*\"|\[[^\]]*\]))"  # title or title array
         r"\s*:\s*"  # :
         r"([^}]*)",  # attributes: all content up to the closing brace
         re.DOTALL,
@@ -265,12 +269,13 @@ def _extract_puppet_resources(content: str, source_path: str) -> list[dict[str, 
     line_starts = _build_line_index(content)
 
     for match in resource_pattern.finditer(content):
-        resource_type = match.group(1).lower()
+        virtual = bool(match.group(1))
+        resource_type = match.group(2).lower()
         if resource_type not in PUPPET_RESOURCE_TYPES:
             continue
 
-        title_raw = match.group(2).strip()
-        attrs_raw = match.group(3)
+        title_raw = match.group(3).strip()
+        attrs_raw = match.group(4)
         line_num = _get_line_number(match.start(), line_starts)
 
         titles = _parse_resource_titles(title_raw)
@@ -284,12 +289,33 @@ def _extract_puppet_resources(content: str, source_path: str) -> list[dict[str, 
                     "attributes": attrs,
                     "source_file": source_path,
                     "line": line_num,
+                    "virtual": virtual,
                 }
             )
             if len(resources) >= MAX_RESOURCES:
                 return resources
 
     return resources
+
+
+def _extract_virtual_realizations(
+    content: str, source_path: str
+) -> list[dict[str, Any]]:
+    """Extract explicit Puppet realize ResourceType['title'] expressions."""
+    pattern = re.compile(
+        r"\brealize\s+(\w+)\s*\[\s*(['\"])([^'\"]+)\2\s*\]",
+        re.IGNORECASE,
+    )
+    line_starts = _build_line_index(content)
+    return [
+        {
+            "type": match.group(1).lower(),
+            "title": match.group(3),
+            "source_file": source_path,
+            "line": _get_line_number(match.start(), line_starts),
+        }
+        for match in pattern.finditer(content)
+    ]
 
 
 def _extract_puppet_classes(content: str, source_path: str) -> list[dict[str, Any]]:
@@ -721,13 +747,17 @@ def _format_manifest_results(results: dict[str, Any], source: str) -> str:
     _format_unsupported_section(parts, unsupported)
 
     # Summary
-    parts.append("Summary:")
-    parts.append(f"  Total resources: {len(resources)}")
-    parts.append(f"  Total classes: {len(classes)}")
-    parts.append(f"  Total variables: {len(variables)}")
-    parts.append(f"  Total facts referenced: {len(facts)}")
-    parts.append(f"  Total templates referenced: {len(templates)}")
-    parts.append(f"  Unsupported constructs: {len(unsupported)}")
+    parts.extend(
+        [
+            "Summary:",
+            f"  Total resources: {len(resources)}",
+            f"  Total classes: {len(classes)}",
+            f"  Total variables: {len(variables)}",
+            f"  Total facts referenced: {len(facts)}",
+            f"  Total templates referenced: {len(templates)}",
+            f"  Unsupported constructs: {len(unsupported)}",
+        ]
+    )
     if unsupported:
         parts.append("  NOTE: Review unsupported constructs before migration.")
 

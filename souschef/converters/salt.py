@@ -3,7 +3,7 @@
 import json
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import yaml
 
@@ -17,6 +17,7 @@ from souschef.core.path_utils import (
     _get_workspace_root,
     _normalize_path,
     safe_exists,
+    safe_glob,
     safe_is_dir,
     safe_mkdir,
     safe_read_text,
@@ -26,6 +27,7 @@ from souschef.parsers.salt import (
     SALT_PKG_FUNCTIONS,
     SALT_SERVICE_FUNCTIONS,
     _extract_pillars,
+    _list_sls_files,
     _parse_sls_states,
 )
 
@@ -418,20 +420,35 @@ def _build_pip_task(state: dict[str, Any]) -> dict[str, Any]:
     args = state.get("args", {})
     state_id = state.get("id", "pip")
 
-    name = args.get("name", args.get("pkgs", state_id))
-    params: dict[str, Any] = {
-        "name": name,
-        "state": SALT_PKG_FUNCTIONS.get(func, "present"),
-    }
+    requirements = args.get("requirements")
+    params: dict[str, Any] = {"state": SALT_PKG_FUNCTIONS.get(func, "present")}
+    if not requirements:
+        params["name"] = args.get("name", args.get("pkgs", state_id))
+    else:
+        params["requirements"] = (
+            "{{ " + _requirements_register_name(state_id) + ".path }}"
+        )
     venv = args.get("bin_env")
     if venv:
         params["virtualenv"] = str(venv)
-
     task: dict[str, Any] = {
         "name": f"Manage pip package: {state_id}",
         "ansible.builtin.pip": params,
     }
+    user = args.get("user")
+    if user:
+        task["become_user"] = str(user)
     return task
+
+
+def _requirements_register_name(state_id: str) -> str:
+    """Create a stable Ansible register identifier for a Salt pip state."""
+    slug = "".join(
+        char if char.isascii() and (char.isalnum() or char == "_") else "_"
+        for char in state_id
+    )
+    slug = slug.strip("_") or "pip"
+    return f"souschef_{slug}_requirements_file"
 
 
 def _build_pkgrepo_task(state: dict[str, Any]) -> dict[str, Any]:
@@ -494,25 +511,19 @@ def _build_generic_task(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def _salt_manual_review_warnings(
-    content: str, include_asset_warning: bool = True
+    content: str,
+    include_asset_warning: bool = True,
+    include_include_warning: bool = True,
 ) -> list[str]:
     """Report Salt constructs that are not preserved by conversion."""
     warnings: list[str] = []
-    if re.search(r"(?m)^\s*include\s*:", content):
+    if include_include_warning and re.search(r"(?m)^\s*include\s*:", content):
         warnings.append(
             "Salt include directives are not translated into role dependencies"
         )
-    if re.search(r"(?m)^\s*-\s*(?:require|watch|require_in|watch_in)\s*:", content):
+    if re.search(r"{%\s*(?:elif|else|for)\b", content):
         warnings.append(
-            "Salt requisites and watch relationships require manual ordering or handlers"
-        )
-    if re.search(r"{%\s*(?:if|elif|else|for)\b", content):
-        warnings.append(
-            "Salt Jinja conditionals or loops are not translated into Ansible task conditions"
-        )
-    if re.search(r"{%\s*set\b", content):
-        warnings.append(
-            "Salt Jinja set variables are removed; define equivalent Ansible variables"
+            "Salt Jinja branches and loops in state files need manual review"
         )
     if include_asset_warning and _SALT_URL_PREFIX in content:
         warnings.append(
@@ -622,7 +633,16 @@ def _copy_salt_asset_files(
         destination = destination_root / destination_rel
         safe_destination = _ensure_within_base_path(destination, workspace_root)
         safe_mkdir(safe_destination.parent, workspace_root, parents=True, exist_ok=True)
-        safe_destination.write_bytes(safe_file.read_bytes())
+        if destination_root.name == "templates":
+            template = safe_read_text(safe_file, workspace_root, encoding="utf-8")
+            safe_write_text(
+                safe_destination,
+                workspace_root,
+                _translate_salt_jinja(template),
+                encoding="utf-8",
+            )
+        else:
+            safe_destination.write_bytes(safe_file.read_bytes())
 
 
 def _order_roles_from_top(
@@ -634,25 +654,114 @@ def _order_roles_from_top(
     parse_top_environments: Any,
 ) -> list[str]:
     """Order generated roles using state order declared in top.sls."""
+    ordered = list(roles_created)
     top_file = safe_salt / _TOP_SLS
-    if not safe_exists(top_file, workspace_root):
-        return roles_created
+    if safe_exists(top_file, workspace_root):
+        try:
+            content = safe_read_text(top_file, workspace_root, encoding="utf-8")
+            environments = parse_top_environments(parse_sls_yaml(content))
+            ordered = _roles_in_top_order(environments, roles_created)
+        except (OSError, ValueError) as exc:
+            warnings.append(f"Could not order roles from top.sls: {exc}")
 
-    try:
-        content = safe_read_text(top_file, workspace_root, encoding="utf-8")
-        environments = parse_top_environments(parse_sls_yaml(content))
-    except (OSError, ValueError) as exc:
-        warnings.append(f"Could not order roles from top.sls: {exc}")
-        return roles_created
+    return _order_roles_from_includes(
+        ordered, safe_salt, workspace_root, warnings, parse_sls_yaml
+    )
 
+
+def _roles_in_top_order(environments: dict[str, Any], roles: list[str]) -> list[str]:
+    """Return generated roles in top.sls order, followed by unlisted roles."""
     ordered: list[str] = []
     for targets in environments.values():
         for state_names in targets.values():
             for state_name in state_names:
-                role_name = state_name.split(".", 1)[0].split("/", 1)[0]
-                if role_name in roles_created and role_name not in ordered:
+                role_name = str(state_name).split(".", 1)[0].split("/", 1)[0]
+                if role_name in roles and role_name not in ordered:
                     ordered.append(role_name)
-    ordered.extend(role for role in roles_created if role not in ordered)
+    ordered.extend(role for role in roles if role not in ordered)
+    return ordered
+
+
+def _order_roles_from_includes(
+    roles: list[str],
+    safe_salt: Any,
+    workspace_root: Any,
+    warnings: list[str],
+    parse_sls_yaml: Any,
+) -> list[str]:
+    """Order included Salt roles before the roles that include them."""
+    role_set = set(roles)
+    edges: dict[str, set[str]] = {role: set() for role in roles}
+    indegree = dict.fromkeys(roles, 0)
+    for rel_path in _list_sls_files(safe_salt, workspace_root):
+        current_role = rel_path.split("/", 1)[0].removesuffix(".sls")
+        if rel_path != _TOP_SLS and current_role in role_set:
+            _add_role_include_edges(
+                rel_path,
+                current_role,
+                role_set,
+                edges,
+                indegree,
+                safe_salt,
+                workspace_root,
+                warnings,
+                parse_sls_yaml,
+            )
+
+    ordered = _topologically_order_roles(roles, edges, indegree)
+    if len(ordered) != len(roles):
+        warnings.append("Salt include cycle detected; top.sls order was retained")
+        return roles
+    return ordered
+
+
+def _add_role_include_edges(
+    rel_path: str,
+    current_role: str,
+    role_set: set[str],
+    edges: dict[str, set[str]],
+    indegree: dict[str, int],
+    safe_salt: Any,
+    workspace_root: Any,
+    warnings: list[str],
+    parse_sls_yaml: Any,
+) -> None:
+    """Add dependency edges for includes declared by one Salt SLS file."""
+    try:
+        content = safe_read_text(safe_salt / rel_path, workspace_root, encoding="utf-8")
+    except OSError as exc:
+        warnings.append(f"Could not inspect includes in {rel_path}: {exc}")
+        return
+    included = parse_sls_yaml(content).get("include", [])
+    if not isinstance(included, list):
+        return
+    for state_name in included:
+        dependency = str(state_name).split(".", 1)[0].split("/", 1)[0]
+        if dependency not in role_set:
+            warnings.append(f"Salt include target '{state_name}' has no generated role")
+        elif current_role not in edges[dependency]:
+            edges[dependency].add(current_role)
+            indegree[current_role] += 1
+
+
+def _topologically_order_roles(
+    roles: list[str], edges: dict[str, set[str]], indegree: dict[str, int]
+) -> list[str]:
+    """Stable topological sort preserving the input role priority."""
+    priority = {role: index for index, role in enumerate(roles)}
+    ready = sorted(
+        (role for role, count in indegree.items() if count == 0),
+        key=priority.__getitem__,
+    )
+    ordered: list[str] = []
+    while ready:
+        role = ready.pop(0)
+        ordered.append(role)
+        for dependent in sorted(edges[role], key=priority.__getitem__):
+            indegree[dependent] -= 1
+            if indegree[dependent] == 0:
+                ready.append(dependent)
+                ready.sort(key=priority.__getitem__)
     return ordered
 
 
@@ -683,32 +792,391 @@ def _convert_state_to_task(state: dict[str, Any]) -> dict[str, Any]:
     """
     module = state.get("module", "")
     builder = _TASK_BUILDERS.get(module, _build_generic_task)
-    return builder(state)
+    task = cast(dict[str, Any], _translate_task_jinja(builder(state)))
+    condition = state.get("when")
+    if condition:
+        task["when"] = condition
+    return task
 
 
-def _pillar_to_ansible_vars(pillar_provenance: dict[str, Any]) -> dict[str, Any]:
-    """
-    Convert pillar provenance mapping to Ansible variable definitions.
+def _translate_task_jinja(value: Any) -> Any:
+    """Translate Salt expressions nested in generated task values."""
+    if isinstance(value, dict):
+        return {key: _translate_task_jinja(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_translate_task_jinja(item) for item in value]
+    if isinstance(value, str):
+        return _translate_salt_jinja(value)
+    return value
 
-    Pillar keys are converted to Ansible variable names with their default
-    values. Variable names use underscores instead of dots.
 
-    Args:
-        pillar_provenance: Dict from _extract_pillars().
+def _requisite_targets(state: dict[str, Any], key: str) -> list[str]:
+    """Extract state IDs from Salt requisite values."""
+    value = state.get("args", {}).get(key, [])
+    entries = value if isinstance(value, list) else [value]
+    return [
+        str(target)
+        for entry in entries
+        if isinstance(entry, dict)
+        for target in entry.values()
+    ]
 
-    Returns:
-        Dict of Ansible variable name -> default value or placeholder.
 
-    """
-    vars_dict: dict[str, Any] = {}
-    for key, meta in pillar_provenance.items():
-        var_name = key.replace(".", "_").replace("-", "_").replace(":", "_")
-        default = meta.get("default")
-        if default is not None:
-            vars_dict[var_name] = default
+def _order_salt_states(
+    states: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], bool]:
+    """Stably topologically order states from require/watch relationships."""
+    indexes_by_id: dict[str, list[int]] = {}
+    for index, state in enumerate(states):
+        indexes_by_id.setdefault(str(state.get("id", "")), []).append(index)
+
+    edges: list[set[int]] = [set() for _ in states]
+    indegree = [0] * len(states)
+    for index, state in enumerate(states):
+        _add_state_requisite_edges(index, state, indexes_by_id, edges, indegree)
+    ordered_indexes = _topologically_order_indexes(edges, indegree)
+    if len(ordered_indexes) != len(states):
+        return states, True
+    return [states[index] for index in ordered_indexes], False
+
+
+def _add_state_requisite_edges(
+    index: int,
+    state: dict[str, Any],
+    indexes_by_id: dict[str, list[int]],
+    edges: list[set[int]],
+    indegree: list[int],
+) -> None:
+    """Add dependency edges for a state's incoming/outgoing requisites."""
+    for field in ("require", "watch"):
+        _add_edges_for_requisite(
+            index, state, field, True, indexes_by_id, edges, indegree
+        )
+    _add_edges_for_requisite(
+        index, state, "require_in", False, indexes_by_id, edges, indegree
+    )
+
+
+def _add_edges_for_requisite(
+    index: int,
+    state: dict[str, Any],
+    field: str,
+    dependency_precedes_state: bool,
+    indexes_by_id: dict[str, list[int]],
+    edges: list[set[int]],
+    indegree: list[int],
+) -> None:
+    """Add state graph edges for one requisite field."""
+    for target in _requisite_targets(state, field):
+        for target_index in indexes_by_id.get(target, []):
+            source, destination = (
+                (target_index, index)
+                if dependency_precedes_state
+                else (index, target_index)
+            )
+            _add_state_edge(source, destination, edges, indegree)
+
+
+def _add_state_edge(
+    source: int, destination: int, edges: list[set[int]], indegree: list[int]
+) -> None:
+    """Add a unique directed edge and update its destination's indegree."""
+    if destination not in edges[source]:
+        edges[source].add(destination)
+        indegree[destination] += 1
+
+
+def _topologically_order_indexes(
+    edges: list[set[int]], indegree: list[int]
+) -> list[int]:
+    """Return stable state indexes in dependency order."""
+    ready = [index for index, count in enumerate(indegree) if count == 0]
+    ordered: list[int] = []
+    while ready:
+        current = ready.pop(0)
+        ordered.append(current)
+        for dependent in sorted(edges[current]):
+            indegree[dependent] -= 1
+            if indegree[dependent] == 0:
+                ready.append(dependent)
+                ready.sort()
+    return ordered
+
+
+def _apply_salt_watch_notifications(
+    states: list[dict[str, Any]], tasks: list[dict[str, Any]]
+) -> list[str]:
+    """Attach service restart handler notifications to Salt watch targets."""
+    task_by_state_id = {
+        str(state.get("id", "")): task
+        for state, task in zip(states, tasks, strict=True)
+    }
+    for state in states:
+        handler_name = _salt_service_handler_name(state)
+        if handler_name:
+            _notify_salt_watch_targets(state, handler_name, task_by_state_id)
+    return []
+
+
+def _salt_service_handler_name(state: dict[str, Any]) -> str | None:
+    """Return the generated handler name for a Salt service state."""
+    if state.get("module") != "service":
+        return None
+    args = state.get("args", {})
+    service_id = str(state.get("id", "service"))
+    return f"Restart {args.get('name', service_id)}"
+
+
+def _notify_salt_watch_targets(
+    state: dict[str, Any],
+    handler_name: str,
+    task_by_state_id: dict[str, dict[str, Any]],
+) -> None:
+    """Notify a service restart handler from tasks watched/listened to."""
+    targets = _requisite_targets(state, "watch")
+    targets.extend(
+        target
+        for target in _requisite_targets(state, "listen")
+        if target not in targets
+    )
+    for target in targets:
+        task = task_by_state_id.get(target)
+        if task is not None:
+            notify = task.setdefault("notify", [])
+            if handler_name not in notify:
+                notify.append(handler_name)
+
+
+def _convert_salt_states_to_tasks(
+    states: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
+    """Order Salt states and convert them with matching handlers and warnings."""
+    ordered_states, has_cycle = _order_salt_states(states)
+    tasks: list[dict[str, Any]] = []
+    state_tasks: list[dict[str, Any]] = []
+    for state in ordered_states:
+        staging_tasks, warning = _requirements_staging_tasks(state)
+        if warning:
+            return tasks, [], [warning]
+        tasks.extend(staging_tasks)
+        state_task = _convert_state_to_task(state)
+        tasks.append(state_task)
+        state_tasks.append(state_task)
+    handlers = _extract_watch_handlers(ordered_states)
+    warnings = _apply_salt_watch_notifications(ordered_states, state_tasks)
+    if has_cycle:
+        warnings.append("Salt requisite cycle detected; source order was retained")
+    return tasks, handlers, warnings
+
+
+def _requirements_staging_tasks(
+    state: dict[str, Any],
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Build secure tempfile and copy tasks for a Salt pip requirements file."""
+    args = state.get("args", {})
+    requirements = args.get("requirements") if state.get("module") == "pip" else None
+    if not requirements:
+        return [], None
+    source = str(requirements)
+    if source.startswith(_SALT_URL_PREFIX):
+        source = source[len(_SALT_URL_PREFIX) :]
+    if source.startswith(_SALT_FILES_PREFIX):
+        source = source[len(_SALT_FILES_PREFIX) :]
+    if ".." in Path(source).parts:
+        return [], "Unsafe Salt requirements asset path was not staged"
+
+    state_id = str(state.get("id", "pip"))
+    register_name = _requirements_register_name(state_id)
+    user = args.get("user")
+    tempfile_task: dict[str, Any] = {
+        "name": f"Create temporary requirements file: {state_id}",
+        "ansible.builtin.tempfile": {
+            "state": "file",
+            "suffix": "_requirements.txt",
+        },
+        "register": register_name,
+    }
+    copy_task: dict[str, Any] = {
+        "name": f"Stage pip requirements: {state_id}",
+        _MOD_COPY: {
+            "src": source,
+            "dest": "{{ " + register_name + ".path }}",
+            "mode": "0600",
+        },
+    }
+    if user:
+        tempfile_task["become_user"] = str(user)
+        copy_task["become_user"] = str(user)
+    return [tempfile_task, copy_task], None
+
+
+def _load_salt_pillar_data(salt_root: Path, workspace_root: Path) -> dict[str, Any]:
+    """Load and merge Pillar SLS data found beside or inside a Salt state tree."""
+    from souschef.parsers.salt import _parse_sls_yaml
+
+    pillar_roots = (salt_root / "pillar", salt_root.parent / "pillar")
+    merged: dict[str, Any] = {}
+    seen: set[Path] = set()
+    for pillar_root in pillar_roots:
+        try:
+            safe_pillar_root = _ensure_within_base_path(pillar_root, workspace_root)
+        except ValueError:
+            continue
+        if safe_pillar_root in seen or not safe_is_dir(
+            safe_pillar_root, workspace_root
+        ):
+            continue
+        seen.add(safe_pillar_root)
+        for pillar_file in safe_glob(safe_pillar_root, "**/*.sls", workspace_root):
+            try:
+                content = safe_read_text(pillar_file, workspace_root, encoding="utf-8")
+            except OSError:
+                continue
+            _deep_merge_dicts(merged, _parse_sls_yaml(content))
+    return merged
+
+
+def _deep_merge_dicts(target: dict[str, Any], source: dict[str, Any]) -> None:
+    """Merge nested Pillar dictionaries, with later sources taking precedence."""
+    for key, value in source.items():
+        if isinstance(value, dict) and isinstance(target.get(key), dict):
+            _deep_merge_dicts(target[key], value)
         else:
-            vars_dict[var_name] = f"{{{{ {var_name} }}}}"
+            target[key] = value
+
+
+def _lookup_pillar_path(data: dict[str, Any], path: str) -> tuple[bool, Any]:
+    """Return a nested Pillar value and whether the full path exists."""
+    value: Any = data
+    for part in path.split("."):
+        if not isinstance(value, dict) or part not in value:
+            return False, None
+        value = value[part]
+    return True, value
+
+
+def _is_sensitive_pillar_key(key: str) -> bool:
+    """Identify Pillar paths that must be supplied through Ansible Vault."""
+    return bool(
+        re.search(r"password|secret|token|private[_-]?key|credential", key, re.I)
+    )
+
+
+def _salt_pillar_var_name(key: str) -> str:
+    """Normalise a Salt Pillar path to an Ansible variable identifier."""
+    return key.replace(".", "_").replace("-", "_").replace(":", "_")
+
+
+def _pillar_to_ansible_vars(
+    pillar_provenance: dict[str, Any], pillar_data: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Resolve referenced Pillar values and externalize sensitive values."""
+    vars_dict: dict[str, Any] = {}
+    data = pillar_data or {}
+    for key, meta in pillar_provenance.items():
+        var_name = _salt_pillar_var_name(key)
+        if _is_sensitive_pillar_key(key):
+            vars_dict[var_name] = f"{{{{ vault_{var_name} }}}}"
+            continue
+        found, value = _lookup_pillar_path(data, key)
+        if found:
+            vars_dict[var_name] = value
+            continue
+        default = meta.get("default")
+        vars_dict[var_name] = (
+            default if default is not None else f"{{{{ {var_name} }}}}"
+        )
     return vars_dict
+
+
+def _translate_salt_jinja(content: str) -> str:
+    """Translate Salt Pillar and Grain expressions to Ansible variables/facts."""
+    pillar_access = re.compile(r"pillar((?:\s*\[\s*['\"][\w.:-]+['\"]\s*\])+)")
+
+    def replace_pillar(match: re.Match[str]) -> str:
+        parts = re.findall(r"['\"]([\w.:-]+)['\"]", match.group(1))
+        var_name = _salt_pillar_var_name(".".join(parts))
+        if re.search(r"\{\{\s*$", content[: match.start()]):
+            return var_name
+        return "{{ " + var_name + " }}"
+
+    translated = pillar_access.sub(replace_pillar, content)
+    translated = re.sub(
+        r"grains\[(['\"])([\w.:-]+)\1\]",
+        r"ansible_facts['\2']",
+        translated,
+    )
+    translated = re.sub(
+        r"grains\.get\(\s*(['\"])([\w.:-]+)\1\s*\)",
+        r"ansible_facts.get('\2')",
+        translated,
+    )
+    return translated
+
+
+def _salt_set_expression(expression: str) -> str:
+    """Convert a simple Salt set expression to an Ansible Jinja value."""
+    parts = _split_salt_jinja_concat(expression)
+    rendered: list[str] = []
+    for part in parts:
+        part = part.strip()
+        if (part.startswith("'") and part.endswith("'")) or (
+            part.startswith('"') and part.endswith('"')
+        ):
+            rendered.append(part[1:-1])
+        elif part.startswith("pillar"):
+            rendered.append(_translate_salt_jinja(part))
+        elif part.isidentifier():
+            rendered.append(f"{{{{ {part} }}}}")
+        else:
+            return _translate_salt_jinja(expression)
+    return "".join(rendered)
+
+
+def _split_salt_jinja_concat(expression: str) -> list[str]:
+    """Split a Jinja concatenation on plus signs outside string literals."""
+    parts: list[str] = []
+    current: list[str] = []
+    quote = ""
+    escaped = False
+    for char in expression.strip():
+        if quote:
+            current.append(char)
+            if char == quote and not escaped:
+                quote = ""
+            escaped = char == "\\" and not escaped
+            continue
+        if char in {"'", '"'}:
+            quote = char
+            current.append(char)
+        elif char == "+":
+            parts.append("".join(current).strip())
+            current.clear()
+        else:
+            current.append(char)
+    parts.append("".join(current).strip())
+    return parts
+
+
+def _extract_jinja_set_vars(content: str) -> dict[str, str]:
+    """Extract simple Salt Jinja set aliases for Ansible variable definitions."""
+    variables: dict[str, str] = {}
+    position = 0
+    while True:
+        tag_start = content.find("{%", position)
+        if tag_start == -1:
+            break
+        tag_end = content.find("%}", tag_start + 2)
+        if tag_end == -1:
+            break
+        tag = content[tag_start + 2 : tag_end].strip()
+        if tag.startswith("set "):
+            assignment = tag[4:].strip()
+            name, separator, expression = assignment.partition("=")
+            if separator and name.strip().isidentifier():
+                variables[name.strip()] = _salt_set_expression(expression)
+        position = tag_end + 2
+    return variables
 
 
 def convert_salt_sls_to_ansible(sls_path: str, playbook_name: str = "") -> str:
@@ -756,17 +1224,19 @@ def convert_salt_sls_to_ansible(sls_path: str, playbook_name: str = "") -> str:
     name = playbook_name or safe_path.stem
     states = _parse_sls_states(content)
     pillars = _extract_pillars(content)
-    ansible_vars = _pillar_to_ansible_vars(pillars)
+    pillar_data = _load_salt_pillar_data(safe_path.parent, workspace_root)
+    ansible_vars = _pillar_to_ansible_vars(pillars, pillar_data)
+    ansible_vars.update(_extract_jinja_set_vars(content))
 
-    tasks = []
+    tasks: list[dict[str, Any]] = []
     tasks_converted = 0
     tasks_unconverted = 0
     warnings: list[str] = []
     warnings.extend(_salt_manual_review_warnings(content))
+    tasks, handlers, state_warnings = _convert_salt_states_to_tasks(states)
+    warnings.extend(state_warnings)
 
     for state in states:
-        task = _convert_state_to_task(state)
-        tasks.append(task)
         module = state.get("module", "")
         if module in _TASK_BUILDERS:
             tasks_converted += 1
@@ -778,7 +1248,7 @@ def convert_salt_sls_to_ansible(sls_path: str, playbook_name: str = "") -> str:
             )
 
     # Render playbook as YAML
-    playbook_yaml = _render_playbook_yaml(name, tasks, ansible_vars)
+    playbook_yaml = _render_playbook_yaml(name, tasks, ansible_vars, handlers)
 
     result: dict[str, Any] = {
         "playbook": playbook_yaml,
@@ -816,6 +1286,7 @@ def _render_playbook_yaml(
     name: str,
     tasks: list[dict[str, Any]],
     ansible_vars: dict[str, Any],
+    handlers: list[dict[str, Any]] | None = None,
 ) -> str:
     """
     Render Ansible playbook as a YAML string.
@@ -824,6 +1295,7 @@ def _render_playbook_yaml(
         name: Playbook/play name.
         tasks: List of Ansible task dicts.
         ansible_vars: Variable definitions for the play.
+        handlers: Optional Ansible handler task dicts.
 
     Returns:
         YAML string representation of the playbook.
@@ -838,6 +1310,8 @@ def _render_playbook_yaml(
         play["vars"] = ansible_vars
     if tasks:
         play["tasks"] = _normalise_task_metadata(tasks)
+    if handlers:
+        play["handlers"] = _normalise_task_metadata(handlers)
 
     return "---\n" + yaml.safe_dump(
         [play], default_flow_style=False, sort_keys=False, allow_unicode=True
@@ -967,9 +1441,9 @@ def _append_inventory_grain_groups(lines: list[str], targets: dict[str, Any]) ->
         group_name = _extract_group_name_from_grain(target)
         if group_name is None:
             continue
-        lines.append(f"[{group_name}]")
-        lines.append(f"# Add hosts matching grain {target} here")
-        lines.append("")
+        lines.extend(
+            [f"[{group_name}]", f"# Add hosts matching grain {target} here", ""]
+        )
 
 
 def _extract_watch_handlers(states: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -1187,8 +1661,7 @@ def convert_salt_pillar_to_vars(pillar_path: str, output_format: str = "yaml") -
             "# Run: ansible-vault encrypt_string '<value>' --name '<key>'",
             "",
         ]
-        for line in vars_yaml.splitlines()[4:]:
-            vault_lines.append(line)
+        vault_lines.extend(vars_yaml.splitlines()[4:])
         vars_yaml = "\n".join(vault_lines) + "\n"
 
     result: dict[str, Any] = {
@@ -1228,33 +1701,92 @@ def _collect_role_data(
     all_tasks: list[dict[str, Any]] = []
     all_handlers: list[dict[str, Any]] = []
     all_defaults: dict[str, Any] = {}
+    all_states: list[dict[str, Any]] = []
+    readable_rel_paths: list[str] = []
+    pillar_data = _load_salt_pillar_data(safe_salt, workspace_root)
 
     for rel_path in rel_paths:
-        file_path = safe_salt / rel_path
-        try:
-            content = safe_read_text(file_path, workspace_root, encoding="utf-8")
-        except OSError as exc:
-            warnings.append(f"Could not read {rel_path}: {exc}")
+        content = _read_role_sls_content(rel_path, safe_salt, workspace_root, warnings)
+        if content is None:
             continue
-
         states = parse_sls_states(content)
+        readable_rel_paths.append(rel_path)
         warnings.extend(
-            _salt_manual_review_warnings(content, include_asset_warning=False)
+            _salt_manual_review_warnings(
+                content,
+                include_asset_warning=False,
+                include_include_warning=False,
+            )
         )
-        handlers = _extract_watch_handlers(states)
-        pillars = extract_pillars(content)
+        all_states.extend(states)
+        _add_content_defaults(content, extract_pillars, pillar_data, all_defaults)
+        all_defaults.update(_extract_jinja_set_vars(content))
 
-        for state in states:
-            all_tasks.append(_convert_state_to_task(state))
+    for reference in _collect_salt_asset_references(
+        readable_rel_paths, safe_salt, workspace_root, warnings
+    ):
+        _add_template_defaults(
+            reference,
+            safe_salt,
+            workspace_root,
+            extract_pillars,
+            pillar_data,
+            all_defaults,
+        )
 
-        all_handlers.extend(handlers)
-
-        for key in pillars:
-            var_name = key.replace(".", "_").replace("-", "_").replace(":", "_")
-            if var_name not in all_defaults:
-                all_defaults[var_name] = f"{{{{ {var_name} | default('') }}}}"
-
+    all_tasks, all_handlers, state_warnings = _convert_salt_states_to_tasks(all_states)
+    warnings.extend(state_warnings)
     return all_tasks, all_handlers, all_defaults
+
+
+def _read_role_sls_content(
+    rel_path: str, safe_salt: Any, workspace_root: Any, warnings: list[str]
+) -> str | None:
+    """Read one role SLS file, recording failures as migration warnings."""
+    try:
+        return safe_read_text(safe_salt / rel_path, workspace_root, encoding="utf-8")
+    except OSError as exc:
+        warnings.append(f"Could not read {rel_path}: {exc}")
+        return None
+
+
+def _add_content_defaults(
+    content: str,
+    extract_pillars: Any,
+    pillar_data: dict[str, Any],
+    defaults: dict[str, Any],
+) -> None:
+    """Merge defaults for Pillar references found in an SLS file."""
+    pillars = extract_pillars(content)
+    if isinstance(pillars, dict):
+        defaults.update(_pillar_to_ansible_vars(pillars, pillar_data))
+    elif isinstance(pillars, list):
+        for key in pillars:
+            var_name = _salt_pillar_var_name(str(key))
+            defaults.setdefault(var_name, f"{{{{ {var_name} | default('') }}}}")
+
+
+def _add_template_defaults(
+    reference: str,
+    safe_salt: Any,
+    workspace_root: Any,
+    extract_pillars: Any,
+    pillar_data: dict[str, Any],
+    defaults: dict[str, Any],
+) -> None:
+    """Merge defaults for Pillar references in a referenced Salt template."""
+    if not reference.startswith(_SALT_TEMPLATES_PREFIX):
+        return
+    source = _find_salt_asset_source(Path(reference), safe_salt)
+    if source is None:
+        return
+    try:
+        template = safe_read_text(source, workspace_root, encoding="utf-8")
+    except (OSError, ValueError):
+        return
+    pillars = extract_pillars(template)
+    if isinstance(pillars, dict):
+        defaults.update(_pillar_to_ansible_vars(pillars, pillar_data))
 
 
 def _write_role_files(

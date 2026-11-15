@@ -34,8 +34,18 @@ def convert_puppet_manifest_to_ansible(manifest_path: str) -> str:
     return puppet_to_ansible.convert_puppet_manifest_to_ansible(manifest_path)
 
 
-def convert_puppet_module_to_ansible(module_path: str) -> str:
-    """Convert a Puppet module to Ansible YAML."""
+def convert_puppet_module_to_ansible(
+    module_path: str, environment: str = "", os_family: str = ""
+) -> str:
+    """Convert a Puppet module with optional Hiera environment and OS family."""
+    if os_family:
+        return puppet_to_ansible.convert_puppet_module_to_ansible(
+            module_path, environment=environment, os_family=os_family
+        )
+    if environment:
+        return puppet_to_ansible.convert_puppet_module_to_ansible(
+            module_path, environment=environment
+        )
     return puppet_to_ansible.convert_puppet_module_to_ansible(module_path)
 
 

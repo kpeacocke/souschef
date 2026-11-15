@@ -478,6 +478,16 @@ def _show_module_directory_section() -> None:
         placeholder="/path/to/puppet/module",
         help="Enter the path to a Puppet module directory containing .pp files",
     )
+    environment = st.selectbox(
+        "Hiera environment",
+        options=["", "staging", "production"],
+        key="puppet_hiera_environment",
+    )
+    os_family = st.selectbox(
+        "Hiera OS family",
+        options=["", "Debian", "RedHat", "Suse"],
+        key="puppet_hiera_os_family",
+    )
 
     col1, col2, col3 = st.columns(3)
 
@@ -517,7 +527,10 @@ def _show_module_directory_section() -> None:
         _run_module_analysis(module_path)
 
     if convert_clicked:
-        _run_module_conversion(module_path)
+        if environment or os_family:
+            _run_module_conversion(module_path, environment, os_family)
+        else:
+            _run_module_conversion(module_path)
 
     if ai_clicked:
         _run_module_ai_conversion(module_path, ai_cfg)
@@ -571,7 +584,9 @@ def _run_manifest_conversion(manifest_path: str) -> None:
     _display_conversion_result(playbook, safe, source_type="manifest")
 
 
-def _run_module_conversion(module_path: str) -> None:
+def _run_module_conversion(
+    module_path: str, environment: str = "", os_family: str = ""
+) -> None:
     """Execute module conversion and display playbook."""
     if st is None:
         return  # pragma: no cover
@@ -582,7 +597,12 @@ def _run_module_conversion(module_path: str) -> None:
         return
 
     with st.spinner("Converting Puppet module to Ansible..."):
-        playbook = convert_puppet_module_to_ansible(safe)
+        if environment or os_family:
+            playbook = convert_puppet_module_to_ansible(
+                safe, environment=environment, os_family=os_family
+            )
+        else:
+            playbook = convert_puppet_module_to_ansible(safe)
 
     _display_conversion_result(playbook, safe, source_type="module")
 

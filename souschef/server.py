@@ -7364,7 +7364,9 @@ def convert_puppet_manifest_to_ansible(manifest_path: str) -> str:
 
 
 @mcp.tool()
-def convert_puppet_module_to_ansible(module_path: str) -> str:
+def convert_puppet_module_to_ansible(
+    module_path: str, environment: str = "", os_family: str = ""
+) -> str:
     """
     Convert a Puppet module directory to an Ansible playbook.
 
@@ -7373,11 +7375,18 @@ def convert_puppet_module_to_ansible(module_path: str) -> str:
 
     Args:
         module_path: Path to the Puppet module directory.
+        environment: Optional Hiera environment name, such as ``staging`` or
+            ``production``.
+        os_family: Optional Hiera OS-family overlay, such as ``Debian``.
 
     Returns:
         Combined Ansible playbook in YAML format as a string.
 
     """
+    if os_family:
+        return _convert_puppet_module_to_ansible(module_path, environment, os_family)
+    if environment:
+        return _convert_puppet_module_to_ansible(module_path, environment)
     return _convert_puppet_module_to_ansible(module_path)
 
 

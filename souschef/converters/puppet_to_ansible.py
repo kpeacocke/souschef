@@ -30,6 +30,7 @@ recipe AI-assisted converters in :mod:`souschef.converters.playbook`.
 
 import importlib
 import re
+from pathlib import Path
 from typing import Any
 
 from souschef.core.constants import (
@@ -41,6 +42,7 @@ from souschef.core.path_utils import (
     _get_workspace_root,
     _normalize_path,
     _resolve_path_under_base,
+    safe_glob,
     safe_read_text,
 )
 from souschef.parsers.puppet import (
@@ -53,6 +55,9 @@ _ERROR_PREFIX = "Error:"
 
 # Shared Ansible module names
 _ANSIBLE_DEBUG_MODULE = "ansible.builtin.debug"
+_SENSITIVE_HIERA_KEY = re.compile(
+    r"password|secret|token|credential|private[_-]?key", re.IGNORECASE
+)
 
 # Backward-compatible alias for tests patching this symbol at use-site.
 _ensure_within_base_path = _resolve_path_under_base
@@ -161,7 +166,231 @@ def convert_puppet_manifest_to_ansible(manifest_path: str) -> str:
         return f"An error occurred: {e}"
 
 
-def convert_puppet_module_to_ansible(module_path: str) -> str:
+def _hiera_ansible_name(key: str) -> str:
+    """Convert a Hiera key into a stable Ansible variable name."""
+    return re.sub(r"\W", "_", key.replace("::", "_"))
+
+
+def _puppet_literal(value: Any) -> str:
+    """Render simple Hiera values as safe Puppet literals for static mapping."""
+    if isinstance(value, bool):
+        return str(value).lower()
+    if isinstance(value, (int, float)) or value is None:
+        return "undef" if value is None else str(value)
+    if isinstance(value, str):
+        return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
+    if isinstance(value, list):
+        return "[" + ", ".join(_puppet_literal(item) for item in value) + "]"
+    return "'" + str(value).replace("\\", "\\\\").replace("'", "\\'") + "'"
+
+
+def _hiera_lookup_default(tail: str) -> tuple[bool, Any]:
+    """Extract common Puppet lookup default forms from trailing arguments."""
+    named_default = re.search(r"default_value\s*=>\s*([^,}]+)", tail)
+    if named_default:
+        value_text = named_default.group(1).strip()
+        return True, _parse_hiera_literal(value_text)
+
+    first_match = re.search(r"['\"]first['\"]", tail)
+    if first_match:
+        remainder = tail[first_match.end() :].lstrip()
+        if not remainder.startswith(","):
+            return False, None
+        value_text = remainder[1:].strip()
+        return True, _parse_hiera_literal(value_text)
+    return False, None
+
+
+def _parse_hiera_literal(value_text: str) -> Any:
+    """Parse primitive YAML-compatible Puppet default literals."""
+    try:
+        yaml_module = importlib.import_module("yaml")
+        return yaml_module.safe_load(value_text)
+    except Exception:
+        return value_text.strip("'\"")
+
+
+def _resolve_puppet_hiera_lookups(
+    content: str, hiera_values: dict[str, Any]
+) -> tuple[str, dict[str, Any], list[str]]:
+    """Resolve Hiera lookup calls from known data and vault sensitive keys."""
+    hiera_values, interpolation_unresolved = _resolve_hiera_interpolations(hiera_values)
+    variables: dict[str, Any] = {}
+    unresolved: list[str] = list(interpolation_unresolved)
+    resolved_hiera_values = dict(hiera_values)
+    lookup_pattern = re.compile(
+        r"\blookup\(\s*(['\"])(?P<key>[^'\"]+)\1(?P<tail>[^)]*)\)"
+    )
+
+    def replace_lookup(match: re.Match[str]) -> str:
+        key = match.group("key")
+        variable = _hiera_ansible_name(key)
+        if key in hiera_values:
+            value = hiera_values[key]
+        else:
+            has_default, value = _hiera_lookup_default(match.group("tail"))
+            if not has_default:
+                unresolved.append(key)
+                return match.group(0)
+        resolved_hiera_values[key] = value
+        if _SENSITIVE_HIERA_KEY.search(key):
+            variables[variable] = f"{{{{ vault_{variable} }}}}"
+            return f"{{{{ vault_{variable} }}}}"
+        variables[variable] = value
+        return _puppet_literal(value)
+
+    resolved_content = lookup_pattern.sub(replace_lookup, content)
+    variable_pattern = re.compile(
+        r"\$(?:\{(?P<braced>[^}]+)\}|(?P<plain>[A-Za-z_]\w*(?:::\w+)+))"
+    )
+
+    def replace_hiera_variable(match: re.Match[str]) -> str:
+        key = match.group("braced") or match.group("plain")
+        if key not in resolved_hiera_values:
+            return match.group(0)
+        variable = _hiera_ansible_name(key)
+        value = resolved_hiera_values[key]
+        if _SENSITIVE_HIERA_KEY.search(key):
+            variables[variable] = f"{{{{ vault_{variable} }}}}"
+            return f"'{{{{ vault_{variable} }}}}'"
+        variables[variable] = value
+        return _puppet_literal(value)
+
+    resolved_content = variable_pattern.sub(replace_hiera_variable, resolved_content)
+    return resolved_content, variables, sorted(set(unresolved))
+
+
+def _resolve_hiera_interpolations(
+    values: dict[str, Any],
+) -> tuple[dict[str, Any], list[str]]:
+    """Resolve nested Hiera lookup and facts interpolation after data overlays merge."""
+    unresolved: list[str] = []
+    lookup_pattern = re.compile(r"%\{lookup\(['\"]([^'\"]+)['\"]\)\}")
+    facts_pattern = re.compile(r"%\{facts\.([^}]+)\}")
+
+    def resolve(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {key: resolve(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [resolve(item) for item in value]
+        if not isinstance(value, str):
+            return value
+
+        def replace_lookup(match: re.Match[str]) -> str:
+            key = match.group(1)
+            if key not in values:
+                unresolved.append(key)
+                return match.group(0)
+            resolved_value = resolve(values[key])
+            if _SENSITIVE_HIERA_KEY.search(key):
+                variable = _hiera_ansible_name(key)
+                return f"{{{{ vault_{variable} }}}}"
+            if isinstance(resolved_value, (dict, list)):
+                return _puppet_literal(resolved_value)
+            return str(resolved_value)
+
+        value = lookup_pattern.sub(replace_lookup, value)
+
+        def replace_fact(match: re.Match[str]) -> str:
+            fact_path = match.group(1).split(".")
+            fact_name = fact_path[-1]
+            fact_map = {"codename": "distribution_release", "os": "distribution"}
+            ansible_fact = fact_map.get(fact_name, fact_name)
+            return f"{{{{ ansible_facts['{ansible_fact}'] }}}}"
+
+        return facts_pattern.sub(replace_fact, value)
+
+    return resolve(values), sorted(set(unresolved))
+
+
+def _load_puppet_hiera_data(
+    module_dir: Path,
+    workspace_root: Path,
+    environment: str = "",
+    os_family: str = "",
+) -> tuple[dict[str, Any], list[str]]:
+    """Load common Hiera YAML and an explicitly selected environment overlay."""
+    data_dir = module_dir / "data"
+    if not data_dir.is_dir():
+        return {}, []
+
+    values: dict[str, Any] = {}
+    common_file = data_dir / "common.yaml"
+    if common_file.exists():
+        values.update(_load_hiera_yaml(common_file, workspace_root))
+
+    os_values, os_warnings = _load_hiera_os_overlay(data_dir, workspace_root, os_family)
+    values.update(os_values)
+    environment_values, environment_warnings = _load_hiera_environment_overlay(
+        data_dir, workspace_root, environment
+    )
+    values.update(environment_values)
+    warnings = os_warnings + environment_warnings
+    values, interpolation_unresolved = _resolve_hiera_interpolations(values)
+    warnings.extend(
+        f"Unresolved Hiera interpolation: {key}" for key in interpolation_unresolved
+    )
+    return values, warnings
+
+
+def _load_hiera_yaml(path: Path, workspace_root: Path) -> dict[str, Any]:
+    """Safely load a Hiera YAML mapping."""
+    yaml_module = importlib.import_module("yaml")
+    safe_path = _resolve_path_under_base(path, workspace_root)
+    result = yaml_module.safe_load(
+        safe_read_text(safe_path, workspace_root, encoding="utf-8")
+    )
+    return result if isinstance(result, dict) else {}
+
+
+def _load_hiera_os_overlay(
+    data_dir: Path, workspace_root: Path, os_family: str
+) -> tuple[dict[str, Any], list[str]]:
+    """Load an explicitly selected, or uniquely available, OS Hiera overlay."""
+    os_dir = data_dir / "os"
+    if not os_dir.is_dir():
+        return {}, []
+    os_files = safe_glob(os_dir, "*.yaml", workspace_root)
+    if os_family:
+        overlay = next(
+            (path for path in os_files if path.stem.lower() == os_family.lower()), None
+        )
+        if overlay is None:
+            return {}, [f"Hiera OS-family data not found: {os_family}"]
+        return _load_hiera_yaml(overlay, workspace_root), []
+    if len(os_files) == 1:
+        return _load_hiera_yaml(os_files[0], workspace_root), []
+    if len(os_files) > 1:
+        return {}, [
+            "Multiple Hiera OS overlays exist; target OS family must be selected"
+        ]
+    return {}, []
+
+
+def _load_hiera_environment_overlay(
+    data_dir: Path, workspace_root: Path, environment: str
+) -> tuple[dict[str, Any], list[str]]:
+    """Load an explicitly selected Hiera environment overlay."""
+    environment_dir = data_dir / "environment"
+    if not environment_dir.is_dir():
+        return {}, []
+    if not environment:
+        if any(environment_dir.glob("*.yaml")) or any(environment_dir.glob("*.yml")):
+            return {}, [
+                "Hiera environment overrides exist; pass an environment to select one"
+            ]
+        return {}, []
+    overlay = environment_dir / f"{environment}.yaml"
+    if not overlay.exists():
+        overlay = environment_dir / f"{environment}.yml"
+    if not overlay.exists():
+        return {}, [f"Hiera environment data not found: {environment}"]
+    return _load_hiera_yaml(overlay, workspace_root), []
+
+
+def convert_puppet_module_to_ansible(
+    module_path: str, environment: str = "", os_family: str = ""
+) -> str:
     """
     Convert a Puppet module directory to a collection of Ansible playbooks.
 
@@ -170,6 +399,10 @@ def convert_puppet_module_to_ansible(module_path: str) -> str:
 
     Args:
         module_path: Path to the Puppet module directory.
+
+        environment: Optional Hiera environment overlay to apply.
+        os_family: Optional Hiera OS-family overlay to apply (for example,
+            ``Debian`` or ``RedHat``).
 
     Returns:
         Combined Ansible playbook in YAML format, or an error message.
@@ -204,26 +437,26 @@ def convert_puppet_module_to_ansible(module_path: str) -> str:
                 module_path,
             )
 
-        all_resources: list[dict[str, Any]] = []
-        all_unsupported: list[dict[str, Any]] = []
-
-        for manifest_path in manifests:
-            try:
-                content = safe_read_text(
-                    manifest_path, workspace_root, encoding="utf-8"
-                )
-                rel_path = str(manifest_path.relative_to(workspace_root))
-                parsed = _parse_manifest_content(content, rel_path)
-                all_resources.extend(parsed.get("resources", []))
-                all_unsupported.extend(parsed.get("unsupported", []))
-            except (OSError, ValueError):
-                continue
+        hiera_values, hiera_warnings = _load_puppet_hiera_data(
+            safe_dir, workspace_root, environment, os_family
+        )
+        for key, value in _collect_puppet_class_defaults(
+            manifests, workspace_root
+        ).items():
+            hiera_values.setdefault(key, value)
+        collected = _collect_hiera_module_manifests(
+            manifests, workspace_root, hiera_values
+        )
+        all_unsupported = collected["unsupported"]
+        all_unsupported.extend(_hiera_warning_items(hiera_warnings, str(safe_dir)))
 
         combined: dict[str, Any] = {
-            "resources": all_resources,
+            "resources": collected["resources"],
             "classes": [],
             "variables": [],
             "unsupported": all_unsupported,
+            "realized_resources": collected["realized_resources"],
+            "hiera_vars": collected["hiera_vars"],
         }
         return _generate_puppet_playbook(combined, module_path)
 
@@ -235,6 +468,104 @@ def convert_puppet_module_to_ansible(module_path: str) -> str:
         return ERROR_PERMISSION_DENIED.format(path=module_path)
     except Exception as e:
         return f"An error occurred: {e}"
+
+
+def _collect_puppet_class_defaults(
+    manifests: list[Path], workspace_root: Path
+) -> dict[str, Any]:
+    """Collect class parameter defaults as lowest-precedence Hiera values."""
+    defaults: dict[str, Any] = {}
+    for manifest_path in manifests:
+        try:
+            content = safe_read_text(manifest_path, workspace_root, encoding="utf-8")
+        except (OSError, ValueError):
+            continue
+        source = str(manifest_path.relative_to(workspace_root))
+        classes = _parse_manifest_content(content, source).get("classes", [])
+        for class_data in classes:
+            class_name = str(class_data.get("name", ""))
+            for parameter in class_data.get("parameters", []):
+                default = str(parameter.get("default", "")).strip()
+                if class_name and default:
+                    key = f"{class_name}::{parameter.get('name', '')}"
+                    defaults.setdefault(key, _parse_hiera_literal(default))
+    return defaults
+
+
+def _collect_hiera_module_manifests(
+    manifests: list[Path],
+    workspace_root: Path,
+    hiera_values: dict[str, Any],
+) -> dict[str, Any]:
+    """Parse module manifests after resolving Hiera values where available."""
+    result: dict[str, Any] = {
+        "resources": [],
+        "unsupported": [],
+        "realized_resources": [],
+        "hiera_vars": {},
+    }
+    for manifest_path in manifests:
+        parsed = _parse_hiera_module_manifest(
+            manifest_path, workspace_root, hiera_values
+        )
+        if parsed is None:
+            continue
+        result["resources"].extend(parsed["resources"])
+        result["realized_resources"].extend(parsed["realized_resources"])
+        result["unsupported"].extend(parsed["unsupported"])
+        result["hiera_vars"].update(parsed["hiera_vars"])
+    return result
+
+
+def _parse_hiera_module_manifest(
+    manifest_path: Path,
+    workspace_root: Path,
+    hiera_values: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Parse one module manifest and report unresolved Hiera lookups."""
+    try:
+        content = safe_read_text(manifest_path, workspace_root, encoding="utf-8")
+    except (OSError, ValueError):
+        return None
+
+    rel_path = str(manifest_path.relative_to(workspace_root))
+    resolved_content, variables, unresolved = _resolve_puppet_hiera_lookups(
+        content, hiera_values
+    )
+    parsed = _parse_manifest_content(resolved_content, rel_path)
+    unsupported = [
+        item
+        for item in parsed.get("unsupported", [])
+        if not str(item.get("construct", "")).startswith("Hiera lookup")
+    ]
+    unsupported.extend(
+        {
+            "construct": "Unresolved Hiera lookup",
+            "text": f"lookup('{key}') has no value in common or selected data",
+            "source_file": rel_path,
+            "line": 1,
+        }
+        for key in unresolved
+    )
+    return {
+        "resources": parsed.get("resources", []),
+        "realized_resources": parsed.get("realized_resources", []),
+        "unsupported": unsupported,
+        "hiera_vars": variables,
+    }
+
+
+def _hiera_warning_items(warnings: list[str], source: str) -> list[dict[str, Any]]:
+    """Convert Hiera selection warnings into review items."""
+    return [
+        {
+            "construct": "Hiera environment selection",
+            "text": warning,
+            "source_file": source,
+            "line": 1,
+        }
+        for warning in warnings
+    ]
 
 
 def convert_puppet_resource_to_task(
@@ -275,8 +606,46 @@ def _generate_puppet_playbook(parsed: dict[str, Any], source: str) -> str:
 
     """
     tasks = []
-    resources = parsed.get("resources", [])
-    unsupported = parsed.get("unsupported", [])
+    all_resources = parsed.get("resources", [])
+    realized_resources = parsed.get("realized_resources", [])
+    realized_keys = {
+        (str(item.get("type", "")).lower(), str(item.get("title", "")))
+        for item in realized_resources
+    }
+    virtual_resources = [
+        resource for resource in all_resources if resource.get("virtual")
+    ]
+    unrealized_virtual = [
+        resource
+        for resource in virtual_resources
+        if (
+            str(resource.get("type", "")).lower(),
+            str(resource.get("title", "")),
+        )
+        not in realized_keys
+    ]
+    resources = [
+        resource
+        for resource in all_resources
+        if not resource.get("virtual")
+        or (
+            str(resource.get("type", "")).lower(),
+            str(resource.get("title", "")),
+        )
+        in realized_keys
+    ]
+    unsupported = [
+        item
+        for item in parsed.get("unsupported", [])
+        if not (
+            item.get("construct") == "Virtual resource realization"
+            and realized_resources
+        )
+        and not (
+            item.get("construct") == "Virtual resource declaration"
+            and not unrealized_virtual
+        )
+    ]
 
     for resource in resources:
         task = convert_puppet_resource_to_task(
@@ -311,6 +680,9 @@ def _generate_puppet_playbook(parsed: dict[str, Any], source: str) -> str:
         "become": True,
         "tasks": tasks if tasks else [],
     }
+    hiera_vars = parsed.get("hiera_vars")
+    if isinstance(hiera_vars, dict) and hiera_vars:
+        play["vars"] = hiera_vars
 
     if not tasks:
         play["tasks"] = [

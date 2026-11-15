@@ -76,6 +76,40 @@ class TestConvertPuppetModuleToAnsible:
         )
         assert result == "---\n- hosts: all"
 
+    @patch("souschef.orchestrators.puppet.puppet_to_ansible")
+    def test_delegates_selected_hiera_environment(
+        self, mock_converter: MagicMock
+    ) -> None:
+        """Selected Hiera environment is forwarded to the converter."""
+        mock_converter.convert_puppet_module_to_ansible.return_value = "---"
+
+        from souschef.orchestrators.puppet import convert_puppet_module_to_ansible
+
+        result = convert_puppet_module_to_ansible("/path/to/module", "staging")
+
+        mock_converter.convert_puppet_module_to_ansible.assert_called_once_with(
+            "/path/to/module", environment="staging"
+        )
+        assert result == "---"
+
+    @patch("souschef.orchestrators.puppet.puppet_to_ansible")
+    def test_delegates_selected_hiera_os_family(
+        self, mock_converter: MagicMock
+    ) -> None:
+        """Selected Hiera OS family is forwarded to the converter."""
+        mock_converter.convert_puppet_module_to_ansible.return_value = "---"
+
+        from souschef.orchestrators.puppet import convert_puppet_module_to_ansible
+
+        result = convert_puppet_module_to_ansible(
+            "/path/to/module", "production", "Debian"
+        )
+
+        mock_converter.convert_puppet_module_to_ansible.assert_called_once_with(
+            "/path/to/module", environment="production", os_family="Debian"
+        )
+        assert result == "---"
+
 
 class TestConvertPuppetManifestToAnsibleWithAi:
     """Tests for convert_puppet_manifest_to_ansible_with_ai."""

@@ -20,6 +20,7 @@ def mock_streamlit():
     """Mock Streamlit for all tests in this module."""
     mock_st = MagicMock()
     mock_st.session_state = {}
+    mock_st.selectbox.return_value = ""
     # Make spinner a context manager
     mock_st.spinner.return_value.__enter__ = MagicMock(return_value=None)
     mock_st.spinner.return_value.__exit__ = MagicMock(return_value=False)
@@ -193,6 +194,17 @@ def test_show_module_convert_clicked(mock_streamlit: MagicMock) -> None:
     with patch("souschef.ui.pages.puppet_migration._run_module_conversion") as mock_run:
         _show_module_directory_section()
         mock_run.assert_called_once_with("/path/to/module")
+
+
+def test_show_module_convert_passes_hiera_selectors(mock_streamlit: MagicMock) -> None:
+    """Selected Hiera environment and OS family reach module conversion."""
+    mock_streamlit.text_input.return_value = "/path/to/module"
+    mock_streamlit.selectbox.side_effect = ["production", "Debian"]
+    mock_streamlit.button.side_effect = [False, True, False]
+
+    with patch("souschef.ui.pages.puppet_migration._run_module_conversion") as mock_run:
+        _show_module_directory_section()
+        mock_run.assert_called_once_with("/path/to/module", "production", "Debian")
 
 
 # ---------------------------------------------------------------------------

@@ -408,6 +408,25 @@ def test_extract_puppet_resources_basic() -> None:
     assert "file" in types
 
 
+def test_extract_virtual_resources_and_realizations() -> None:
+    """Virtual Puppet resources are distinguished from explicit realizations."""
+    content = """\
+@package { 'prometheus-node-exporter': ensure => installed }
+@service { 'prometheus-node-exporter': ensure => running }
+realize Package['prometheus-node-exporter']
+realize Service['prometheus-node-exporter']
+"""
+
+    parsed = _parse_manifest_content(content, "monitoring.pp")
+
+    assert len(parsed["resources"]) == 2
+    assert all(resource["virtual"] for resource in parsed["resources"])
+    assert {(item["type"], item["title"]) for item in parsed["realized_resources"]} == {
+        ("package", "prometheus-node-exporter"),
+        ("service", "prometheus-node-exporter"),
+    }
+
+
 def test_extract_puppet_resources_with_attributes() -> None:
     """Test that resource attributes are correctly extracted."""
     resources = _extract_puppet_resources(SIMPLE_MANIFEST, "test.pp")
@@ -615,6 +634,24 @@ def test_detect_unsupported_realize() -> None:
     assert "Virtual resource realization" in constructs
 
 
+def test_detect_unsupported_puppetdb_query() -> None:
+    """PuppetDB queries are flagged because they require live inventory data."""
+    unsupported = _detect_unsupported_constructs(
+        "puppetdb_query(\"resources[certname] { type = 'Class' }\")",
+        "discover.pp",
+    )
+    assert any(item["construct"] == "PuppetDB query" for item in unsupported)
+
+
+def test_detect_unsupported_class_orchestration() -> None:
+    """Class include/contain orchestration is flagged for role wiring review."""
+    unsupported = _detect_unsupported_constructs(
+        "include profile::base\ncontain profile::app",
+        "init.pp",
+    )
+    assert any(item["construct"] == "Class orchestration" for item in unsupported)
+
+
 # ---------------------------------------------------------------------------
 # Tests: helper functions
 # ---------------------------------------------------------------------------
@@ -740,7 +777,8 @@ def test_format_manifest_results_many_variables() -> None:
         "unsupported": [],
     }
     output = _format_manifest_results(results, "x.pp")
-    assert "and" in output and "more" in output
+    assert "and" in output
+    assert "more" in output
 
 
 def test_format_manifest_results_many_facts() -> None:

@@ -29,7 +29,9 @@ from souschef.converters.puppet_to_ansible import (
     _format_module_analysis,
     _format_unsupported_for_prompt,
     _generate_puppet_playbook,
+    _load_puppet_hiera_data,
     _map_ensure,
+    _resolve_puppet_hiera_lookups,
     _source_to_play_name,
     convert_puppet_manifest_to_ansible,
     convert_puppet_manifest_to_ansible_with_ai,
@@ -529,7 +531,7 @@ def test_convert_module_generic_exception() -> None:
     assert "error occurred" in result.lower()
 
 
-def test_convert_module_value_error(tmp_path: Path) -> None:
+def test_convert_module_value_error() -> None:
     """Test that ValueError during module conversion returns an error."""
     with patch(
         "souschef.converters.puppet_to_ansible._ensure_within_base_path",
@@ -539,7 +541,7 @@ def test_convert_module_value_error(tmp_path: Path) -> None:
     assert "Error" in result
 
 
-def test_convert_module_file_not_found_error(tmp_path: Path) -> None:
+def test_convert_module_file_not_found_error() -> None:
     """Test that FileNotFoundError during module conversion returns an error."""
     with patch(
         "souschef.converters.puppet_to_ansible._ensure_within_base_path",
@@ -566,10 +568,15 @@ def test_convert_module_skips_unreadable_file(tmp_path: Path) -> None:
     good.write_text("package { 'vim': ensure => installed }", encoding="utf-8")
     bad.write_text("package { 'curl': ensure => installed }", encoding="utf-8")
 
-    def _selective(path: Path, *args: object, **kwargs: object) -> str:
+    def _selective(
+        path: Path,
+        base_path: Path,
+        encoding: str = "utf-8",
+        errors: str = "strict",
+    ) -> str:
         if "bad" in str(path):
             raise OSError("cannot read")
-        return safe_read_text(path, *args, **kwargs)
+        return safe_read_text(path, base_path, encoding, errors)
 
     with patch(
         "souschef.converters.puppet_to_ansible.safe_read_text",
@@ -764,6 +771,225 @@ def test_generate_playbook_with_unsupported() -> None:
     assert "puppet_unconverted" in warning_tasks[0].get("tags", [])
 
 
+def test_generate_playbook_includes_realized_virtual_resources() -> None:
+    """Explicitly realized virtual resources become tasks without warnings."""
+    parsed = {
+        "resources": [
+            {
+                "type": "package",
+                "title": "prometheus-node-exporter",
+                "attributes": {"ensure": "installed"},
+                "virtual": True,
+            }
+        ],
+        "realized_resources": [
+            {"type": "package", "title": "prometheus-node-exporter"}
+        ],
+        "classes": [],
+        "variables": [],
+        "unsupported": [
+            {
+                "construct": "Virtual resource declaration",
+                "text": "@package { 'prometheus-node-exporter': ... }",
+                "source_file": "monitoring.pp",
+                "line": 1,
+            },
+            {
+                "construct": "Virtual resource realization",
+                "text": "realize Package['prometheus-node-exporter']",
+                "source_file": "monitoring.pp",
+                "line": 2,
+            },
+        ],
+    }
+
+    playbook = yaml.safe_load(_generate_puppet_playbook(parsed, "monitoring.pp"))
+    tasks = playbook[0]["tasks"]
+
+    assert any("ansible.builtin.package" in task for task in tasks)
+    assert not any("puppet_unconverted" in task.get("tags", []) for task in tasks)
+
+
+def test_resolve_hiera_common_values_and_externalize_secrets() -> None:
+    """Hiera common data resolves to Ansible vars without exposing secrets."""
+    content = (
+        "$port = lookup('profile_app_stack::app_port')\n"
+        "$secret = lookup('profile_app_stack::secret_key')\n"
+        "$missing = lookup('profile_app_stack::missing')\n"
+    )
+    data = {
+        "profile_app_stack::app_port": 8000,
+        "profile_app_stack::secret_key": "do-not-copy",
+    }
+
+    resolved, variables, unresolved = _resolve_puppet_hiera_lookups(content, data)
+
+    assert "$port = 8000" in resolved
+    assert "$secret = {{ vault_profile_app_stack_secret_key }}" in resolved
+    assert variables["profile_app_stack_app_port"] == 8000
+    assert variables["profile_app_stack_secret_key"] == (
+        "{{ vault_profile_app_stack_secret_key }}"
+    )
+    assert "do-not-copy" not in str(variables)
+    assert unresolved == ["profile_app_stack::missing"]
+
+
+def test_resolve_hiera_lookup_default_without_data() -> None:
+    """Puppet lookup defaults resolve even when no Hiera key is present."""
+    content = "lookup('profile_haproxy::firewall_provider', String, 'first', 'ufw')"
+
+    resolved, variables, unresolved = _resolve_puppet_hiera_lookups(content, {})
+
+    assert resolved == "'ufw'"
+    assert variables["profile_haproxy_firewall_provider"] == "ufw"
+    assert unresolved == []
+
+
+def test_resolve_hiera_interpolation_and_namespaced_variable_titles() -> None:
+    """Nested Hiera interpolation resolves arrays used as resource titles."""
+    from souschef.parsers.puppet import _parse_manifest_content
+
+    data = {
+        "profile_postgresql::version": "16",
+        "profile_postgresql::package_names": [
+            "postgresql-%{lookup('profile_postgresql::version')}",
+            "postgresql-contrib-%{lookup('profile_postgresql::version')}",
+        ],
+    }
+    content = """\
+package { $profile_postgresql::package_names:
+  ensure => installed,
+}
+"""
+
+    resolved, variables, unresolved = _resolve_puppet_hiera_lookups(content, data)
+    parsed = _parse_manifest_content(resolved, "install.pp")
+
+    assert [resource["title"] for resource in parsed["resources"]] == [
+        "postgresql-16",
+        "postgresql-contrib-16",
+    ]
+    assert variables["profile_postgresql_package_names"] == [
+        "postgresql-16",
+        "postgresql-contrib-16",
+    ]
+    assert unresolved == []
+
+
+def test_load_hiera_uses_single_unambiguous_os_overlay(tmp_path: Path) -> None:
+    """A sole Hiera OS overlay is safe to load without target facts."""
+    module = tmp_path / "profile_postgresql"
+    os_data = module / "data" / "os"
+    os_data.mkdir(parents=True)
+    (os_data / "Debian.yaml").write_text("profile_postgresql::version: '16'\n")
+
+    values, warnings = _load_puppet_hiera_data(module, tmp_path)
+
+    assert values["profile_postgresql::version"] == "16"
+    assert warnings == []
+
+
+def test_convert_module_uses_selected_hiera_environment(tmp_path, monkeypatch) -> None:
+    """Module conversion overlays the explicitly selected Hiera environment."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+    module = tmp_path / "profile_app_stack"
+    manifests = module / "manifests"
+    manifests.mkdir(parents=True)
+    (manifests / "init.pp").write_text(
+        "package { 'sample': ensure => lookup('profile_app_stack::package_state') }"
+    )
+    data = module / "data"
+    environment_data = data / "environment"
+    environment_data.mkdir(parents=True)
+    (data / "common.yaml").write_text("profile_app_stack::package_state: present\n")
+    (environment_data / "staging.yaml").write_text(
+        "profile_app_stack::package_state: absent\n"
+    )
+    (environment_data / "production.yaml").write_text(
+        "profile_app_stack::package_state: latest\n"
+    )
+
+    result = convert_puppet_module_to_ansible(str(module), environment="staging")
+    playbook = yaml.safe_load(result)
+
+    assert playbook[0]["vars"]["profile_app_stack_package_state"] == "absent"
+    assert playbook[0]["tasks"][0]["ansible.builtin.package"]["state"] == "absent"
+    assert not any(
+        "Hiera environment selection" in task["name"] for task in playbook[0]["tasks"]
+    )
+    assert not any("Hiera lookup" in task["name"] for task in playbook[0]["tasks"])
+
+
+def test_convert_module_uses_selected_hiera_os_family(tmp_path, monkeypatch) -> None:
+    """Explicit OS family selects the matching Hiera OS overlay."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+    module = tmp_path / "profile_postgresql"
+    manifests = module / "manifests"
+    manifests.mkdir(parents=True)
+    (manifests / "init.pp").write_text(
+        "package { 'postgresql': ensure => lookup('profile_postgresql::state') }"
+    )
+    os_data = module / "data" / "os"
+    os_data.mkdir(parents=True)
+    (os_data / "Debian.yaml").write_text("profile_postgresql::state: absent\n")
+    (os_data / "RedHat.yaml").write_text("profile_postgresql::state: latest\n")
+
+    result = convert_puppet_module_to_ansible(str(module), os_family="Debian")
+    playbook = yaml.safe_load(result)
+
+    assert playbook[0]["tasks"][0]["ansible.builtin.package"]["state"] == "absent"
+    assert not any("Hiera OS-family" in task["name"] for task in playbook[0]["tasks"])
+
+
+def test_convert_module_resolves_hiera_lookup_from_class_default(
+    tmp_path, monkeypatch
+) -> None:
+    """Class parameter defaults provide fallback Hiera values."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+    module = tmp_path / "sample"
+    manifests = module / "manifests"
+    manifests.mkdir(parents=True)
+    (manifests / "init.pp").write_text(
+        """\
+class sample (
+    String $package_state = 'absent',
+) {
+    package { 'old-package':
+        ensure => lookup('sample::package_state'),
+    }
+}
+"""
+    )
+
+    result = convert_puppet_module_to_ansible(str(module))
+    playbook = yaml.safe_load(result)
+
+    assert playbook[0]["tasks"][0]["ansible.builtin.package"]["state"] == "absent"
+    assert not any("Hiera lookup" in task["name"] for task in playbook[0]["tasks"])
+
+
+def test_convert_module_warns_when_hiera_environment_is_ambiguous(
+    tmp_path, monkeypatch
+) -> None:
+    """Multiple Hiera environment overlays are not selected implicitly."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+    module = tmp_path / "profile_app_stack"
+    manifests = module / "manifests"
+    manifests.mkdir(parents=True)
+    (manifests / "init.pp").write_text("package { 'sample': ensure => installed }")
+    environment_data = module / "data" / "environment"
+    environment_data.mkdir(parents=True)
+    (environment_data / "staging.yaml").write_text("value: staging\n")
+    (environment_data / "production.yaml").write_text("value: production\n")
+
+    result = convert_puppet_module_to_ansible(str(module))
+    playbook = yaml.safe_load(result)
+
+    assert any(
+        "Hiera environment selection" in task["name"] for task in playbook[0]["tasks"]
+    )
+
+
 def test_generate_playbook_empty_resources() -> None:
     """Test that a playbook with no resources has a debug fallback task."""
     parsed = {
@@ -776,6 +1002,7 @@ def test_generate_playbook_empty_resources() -> None:
     playbook = yaml.safe_load(result)
     tasks = playbook[0]["tasks"]
     assert len(tasks) >= 1
+    assert "puppet_unconverted" in tasks[0].get("tags", [])
 
 
 # ---------------------------------------------------------------------------
@@ -1127,10 +1354,15 @@ def test_collect_module_manifests_skips_unreadable(tmp_path: Path) -> None:
     good.write_text("package { 'vim': ensure => installed }", encoding="utf-8")
     bad.write_text("package { 'curl': ensure => installed }", encoding="utf-8")
 
-    def _selective(path: Path, *args: object, **kwargs: object) -> str:
+    def _selective(
+        path: Path,
+        base_path: Path,
+        encoding: str = "utf-8",
+        errors: str = "strict",
+    ) -> str:
         if "bad" in str(path):
             raise OSError("cannot read")
-        return safe_read_text(path, *args, **kwargs)
+        return safe_read_text(path, base_path, encoding, errors)
 
     with patch(
         "souschef.converters.puppet_to_ansible.safe_read_text",

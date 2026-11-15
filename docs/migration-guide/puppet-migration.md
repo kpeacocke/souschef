@@ -45,14 +45,16 @@ The following Puppet DSL constructs require manual review or AI-assisted convers
 
 | Construct | Reason |
 |-----------|--------|
-| `hiera()` / `lookup()` | Hiera lookups require knowledge of your Hiera hierarchy |
+| `hiera()` / `lookup()` | Values not found in module `data/common.yaml`, the selected environment, or selected OS-family overlay |
 | `create_resources()` | Dynamic resource creation without static structure |
 | `generate()` | External command execution at compile time |
 | `inline_template()` | Embedded Ruby logic |
 | `defined()` | Conditional compile-time checks |
-| Virtual resources (`@type { }`) | Deferred resource realisation |
+| Virtual resources (`@type { }`) | Converted only when a matching `realize` is present; otherwise retained as a tagged manual-review placeholder |
 | Exported resources (`@@type { }`) | Cross-node resource sharing |
 | Resource collection (`<| |>`) | Dynamic resource collection |
+| `puppetdb_query()` | Requires live PuppetDB data and cannot be statically converted |
+| `include` / `contain` class orchestration | Class dependency and ordering semantics need review in the Ansible role structure |
 
 For these constructs, use `convert_puppet_manifest_to_ansible_with_ai` or the AI-Assisted Convert button in the web UI.
 
@@ -155,6 +157,10 @@ For Puppet modules with multiple manifests:
     # Single consolidated playbook
     souschef puppet convert-module modules/nginx --output nginx.yml
 
+    # Apply Hiera common data plus the selected environment overlay
+    souschef puppet convert-module modules/profile_app_stack \
+      --environment staging --os-family Debian --output app-stack.yml
+
     # Per-manifest output files
     souschef puppet convert-module modules/nginx --output-dir ./roles/nginx
     ```
@@ -171,6 +177,14 @@ Generated playbooks require review before production use:
 2. **Resolve Hiera variables**: Replace Hiera lookup references with Ansible variables or vault-encrypted values
 3. **Review `exec` idempotency**: Add `creates`, `when`, or `changed_when` conditions to `ansible.builtin.command` tasks
 4. **Test in staging**: Run the playbook against a non-production environment first
+
+Module conversion loads `data/common.yaml` and the selected Hiera overlays.
+Pass `--environment` for an overlay under `data/environment/` and `--os-family`
+for an overlay under `data/os/`. If multiple environment or OS overlays exist
+and no selector is supplied, output includes a `puppet_unconverted` warning
+rather than guessing. Sensitive Hiera keys are emitted as `vault_*` references
+and are not copied as plaintext. Only virtual resources with a matching
+`realize` are emitted as normal tasks.
 
 ---
 

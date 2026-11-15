@@ -312,7 +312,7 @@ Navigate to: **Chef** tab → **Puppet Migration**
 The page supports two input modes selectable via a dropdown:
 
 - **Manifest File Path**: Enter the path to a single `.pp` manifest file
-- **Module Directory Path**: Enter the path to a Puppet module root directory to convert all manifests in the module
+- **Module Directory Path**: Enter the path to a Puppet module root directory to convert all manifests in the module; choose optional Hiera environment and OS-family overlays when needed
 
 ### Actions Available
 

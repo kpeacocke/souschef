@@ -1004,9 +1004,11 @@ def _output_result(result: str, output_format: str) -> None:
         _output_text_format(result)
 
 
-@cli.group(name="api")
-def api_group() -> None:
-    """REST API and webhook companion commands."""
+api_group = click.Group(
+    name="api",
+    help="REST API and webhook companion commands.",
+)
+cli.add_command(api_group)
 
 
 @api_group.command("serve")
@@ -3316,10 +3318,22 @@ def puppet_convert(manifest_path: str, output: str | None) -> None:
     default=None,
     help="Directory to write per-manifest playbook files to.",
 )
+@click.option(
+    "--environment",
+    default="",
+    help="Hiera environment overlay to use (for example: staging or production).",
+)
+@click.option(
+    "--os-family",
+    default="",
+    help="Hiera OS-family overlay to use (for example: Debian or RedHat).",
+)
 def puppet_convert_module(
     module_path: str,
     output: str | None,
     output_dir: str | None,
+    environment: str,
+    os_family: str,
 ) -> None:
     """
     Convert a Puppet module directory to an Ansible playbook.
@@ -3331,7 +3345,7 @@ def puppet_convert_module(
     )
 
     try:
-        result = _convert_puppet_module(module_path)
+        result = _convert_puppet_module(module_path, environment, os_family)
         if output_dir is not None:
             base = Path(output_dir)
             base.mkdir(parents=True, exist_ok=True)

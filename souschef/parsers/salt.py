@@ -290,9 +290,15 @@ def _extract_pillars(content: str) -> dict[str, Any]:
     """
     pillars: dict[str, Any] = {}
 
-    # Pattern: pillar['key'] or pillar["key"]
-    for m in re.finditer(r"pillar\[(['\"])(\w[\w.:-]*)\1\]", content):
-        key = m.group(2)
+    # Pattern: pillar['key'] and nested pillar['app']['db']['host'] access.
+    direct_pattern = re.compile(
+        r"pillar((?:\s*\[\s*['\"][\w.:-]+['\"]\s*\])+)",
+    )
+    for match in direct_pattern.finditer(content):
+        path_parts = re.findall(r"\[\s*['\"]([\w.:-]+)['\"]\s*\]", match.group(1))
+        if not path_parts:
+            continue
+        key = ".".join(path_parts)
         pillars[key] = {"source": "pillar", "access": "direct", "default": None}
 
     # Pattern: pillar.get('key') or pillar.get('key', 'default')
@@ -328,6 +334,67 @@ def _extract_pillars(content: str) -> dict[str, Any]:
         }
 
     return pillars
+
+
+def _extract_jinja_condition_map(content: str) -> dict[str, str]:
+    """Map state IDs inside simple Salt Jinja if blocks to Ansible conditions."""
+    conditions: dict[str, str] = {}
+    active: list[str | None] = []
+    position = 0
+    while True:
+        tag_start = content.find("{%", position)
+        if tag_start == -1:
+            _add_condition_for_state_lines(content[position:], active, conditions)
+            break
+        _add_condition_for_state_lines(content[position:tag_start], active, conditions)
+        tag_end = content.find("%}", tag_start + 2)
+        if tag_end == -1:
+            break
+        tag = content[tag_start + 2 : tag_end].strip()
+        if tag.startswith("if "):
+            active.append(_translate_grain_condition(tag[3:].strip()))
+        elif tag.startswith(("elif ", "else")):
+            if active:
+                active[-1] = None
+        elif tag.startswith("endif") and active:
+            active.pop()
+        position = tag_end + 2
+    return conditions
+
+
+def _add_condition_for_state_lines(
+    segment: str, active: list[str | None], conditions: dict[str, str]
+) -> None:
+    """Attach active simple Jinja conditions to top-level SLS state IDs."""
+    if not active or any(condition is None for condition in active):
+        return
+    condition = " and ".join(str(item) for item in active)
+    for line in segment.splitlines():
+        if line and not line[0].isspace() and ":" in line:
+            state_id = line.split(":", 1)[0].strip()
+            if state_id:
+                conditions[state_id] = condition
+
+
+def _translate_grain_condition(condition: str) -> str:
+    """Translate simple Salt grain indexing in a Jinja if condition."""
+    translated: list[str] = []
+    position = 0
+    while position < len(condition):
+        if condition.startswith("grains[", position):
+            quote_start = position + len("grains[")
+            quote = condition[quote_start : quote_start + 1]
+            if quote in {"'", '"'}:
+                value_end = condition.find(quote, quote_start + 1)
+                close_bracket = condition.find("]", value_end + 1)
+                if value_end != -1 and close_bracket != -1:
+                    key = condition[quote_start + 1 : value_end]
+                    translated.append(f"ansible_facts['{key}']")
+                    position = close_bracket + 1
+                    continue
+        translated.append(condition[position])
+        position += 1
+    return "".join(translated)
 
 
 def _extract_grains(content: str) -> list[str]:
@@ -366,12 +433,16 @@ def _parse_sls_states(content: str) -> list[dict[str, Any]]:
     """
     data = _parse_sls_yaml(content)
     states: list[dict[str, Any]] = []
+    conditions = _extract_jinja_condition_map(content)
 
     for state_id, state_def in data.items():
         # Skip YAML top-level keys that are not state definitions
         if state_id in ("include", "extend"):
             continue
         entries = _extract_state_id_and_module(state_id, state_def)
+        for entry in entries:
+            if state_id in conditions:
+                entry["when"] = conditions[state_id]
         states.extend(entries)
 
     return states

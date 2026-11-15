@@ -879,10 +879,10 @@ app_config:
 
     result = json.loads(convert_salt_sls_to_ansible(str(sls_file)))
 
-    assert any("conditional" in warning.lower() for warning in result["warnings"])
-    assert any("requisite" in warning.lower() for warning in result["warnings"])
     assert any("include" in warning.lower() for warning in result["warnings"])
     assert any("asset" in warning.lower() for warning in result["warnings"])
+    playbook = yaml.safe_load(result["playbook"])
+    assert playbook[0]["tasks"][0]["when"] == "ansible_facts['os_family'] == 'Debian'"
 
 
 def test_convert_salt_directory_stages_template_and_file_assets(tmp_path: Path) -> None:
@@ -901,9 +901,17 @@ app_static:
     - source: salt://files/app/static
 """
     )
+    pillar_dir = tmp_path / "pillar"
+    pillar_dir.mkdir()
+    (pillar_dir / "app.sls").write_text(
+        "app:\n  config:\n    port: 8088\n    secret_key: hidden\n"
+    )
     templates_dir = tmp_path / "templates"
     templates_dir.mkdir()
-    (templates_dir / "app.conf.jinja").write_text("port={{ app_port }}\n")
+    (templates_dir / "app.conf.jinja").write_text(
+        "port={{ pillar['app']['config']['port'] }}\n"
+        "secret={{ pillar['app']['config']['secret_key'] }}\n"
+    )
     static_dir = tmp_path / "files" / "app" / "static"
     static_dir.mkdir(parents=True)
     (static_dir / "index.html").write_text("hello\n")
@@ -914,6 +922,7 @@ app_static:
     result = json.loads(convert_salt_directory_to_roles(str(salt_dir), str(out_dir)))
     role_dir = out_dir / "roles" / "app"
     tasks = yaml.safe_load((role_dir / "tasks/main.yml").read_text())
+    defaults = yaml.safe_load((role_dir / "defaults/main.yml").read_text())
     by_name = {task["name"]: task for task in tasks}
 
     assert (
@@ -924,8 +933,10 @@ app_static:
         by_name["Manage file: app_static"]["ansible.builtin.copy"]["src"]
         == "app/static"
     )
-    assert (
-        role_dir / "templates/app.conf.jinja"
-    ).read_text() == "port={{ app_port }}\n"
+    assert (role_dir / "templates/app.conf.jinja").read_text() == (
+        "port={{ app_config_port }}\nsecret={{ app_config_secret_key }}\n"
+    )
     assert (role_dir / "files/app/static/index.html").read_text() == "hello\n"
+    assert defaults["app_config_port"] == 8088
+    assert defaults["app_config_secret_key"] == "{{ vault_app_config_secret_key }}"
     assert not any("asset" in warning.lower() for warning in result["warnings"])

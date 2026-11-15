@@ -138,9 +138,11 @@ nav:
       - Mock AWX: testing/MOCK_AWX.md
       - Mock Chef Server: testing/MOCK_CHEF_SERVER.md
       - Mock IR Workflow: testing/MOCK_IR_WORKFLOW.md
+      - Accessibility Regression Checklist: testing/ACCESSIBILITY_REGRESSION_CHECKLIST.md
   - Operations:
       - Docker Deployment: docker-deployment.md
       - Docker Setup: docker-setup.md
+      - Theme System: THEME_SYSTEM.md
       - IR Reference: IR.md
       - SonarCloud Phase 1 Extension: SONARCLOUD_PHASE1_EXTENSION.md
   - Contributing:

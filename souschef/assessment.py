@@ -1590,7 +1590,7 @@ def _format_activity_breakdown(activities: list[ActivityBreakdown]) -> str:
         return ""
 
     lines = ["**Activity Breakdown by Component:**"]
-    lines.append("")
+    lines.extend([""])
 
     # Calculate totals
     total_manual_hours = sum(a.manual_hours for a in activities)
@@ -1602,27 +1602,25 @@ def _format_activity_breakdown(activities: list[ActivityBreakdown]) -> str:
 
     # Format each activity
     for activity in sorted_activities:
-        lines.append(f"• **{activity.activity_type}** ({activity.count} items):")
-        lines.append(
-            f"  - Manual: {activity.manual_hours:.1f}h ({activity.manual_days:.1f} days)"
+        lines.extend(
+            [
+                f"• **{activity.activity_type}** ({activity.count} items):",
+                f"  - Manual: {activity.manual_hours:.1f}h ({activity.manual_days:.1f} days)",
+                f"  - With AI: {activity.ai_assisted_hours:.1f}h ({activity.ai_assisted_days:.1f} days)",
+                f"  - Save: {activity.time_saved_hours:.1f}h ({activity.efficiency_gain_percent}%)",
+                f"  - {activity.description}",
+                "",
+            ]
         )
-        lines.append(
-            f"  - With AI: {activity.ai_assisted_hours:.1f}h ({activity.ai_assisted_days:.1f} days)"
-        )
-        lines.append(
-            f"  - Save: {activity.time_saved_hours:.1f}h ({activity.efficiency_gain_percent}%)"
-        )
-        lines.append(f"  - {activity.description}")
-        lines.append("")
 
     # Add summary
-    lines.append("**Total Activity Hours:**")
-    lines.append(
-        f"• Manual: {total_manual_hours:.1f}h ({total_manual_hours / 8:.1f} days)"
-    )
-    lines.append(f"• With AI: {total_ai_hours:.1f}h ({total_ai_hours / 8:.1f} days)")
-    lines.append(
-        f"• Time Saved: {total_saved_hours:.1f}h ({int((total_saved_hours / total_manual_hours) * 100)}% reduction)"
+    lines.extend(
+        [
+            "**Total Activity Hours:**",
+            f"• Manual: {total_manual_hours:.1f}h ({total_manual_hours / 8:.1f} days)",
+            f"• With AI: {total_ai_hours:.1f}h ({total_ai_hours / 8:.1f} days)",
+            f"• Time Saved: {total_saved_hours:.1f}h ({int((total_saved_hours / total_manual_hours) * 100)}% reduction)",
+        ]
     )
 
     return "\n".join(lines)
@@ -1714,11 +1712,11 @@ def _generate_migration_recommendations_from_assessment(
 
     # Platform-specific recommendations
     if target_platform == "ansible_awx":
-        recommendations.append(
-            "• Implement AWX/AAP integration for job templates and workflows"
-        )
-        recommendations.append(
-            "• Set up dynamic inventory sources for Chef server integration"
+        recommendations.extend(
+            [
+                "• Implement AWX/AAP integration for job templates and workflows",
+                "• Set up dynamic inventory sources for Chef server integration",
+            ]
         )
 
     # Complexity-based recommendations
@@ -1726,25 +1724,37 @@ def _generate_migration_recommendations_from_assessment(
     complexity_level = categorize_complexity(avg_complexity)
 
     if complexity_level == ComplexityLevel.HIGH:
-        recommendations.append(
-            "• Consider phased migration approach due to high complexity"
+        recommendations.extend(
+            [
+                "• Consider phased migration approach due to high complexity",
+                "• Allocate additional time for custom resource conversion",
+                "• Plan for comprehensive testing and validation",
+            ]
         )
-        recommendations.append(
-            "• Allocate additional time for custom resource conversion"
-        )
-        recommendations.append("• Plan for comprehensive testing and validation")
     elif complexity_level == ComplexityLevel.LOW:
-        recommendations.append("• Standard migration timeline should be sufficient")
-        recommendations.append("• Consider big-bang approach for faster delivery")
+        recommendations.extend(
+            [
+                "• Standard migration timeline should be sufficient",
+                "• Consider big-bang approach for faster delivery",
+            ]
+        )
     else:
-        recommendations.append("• Balanced approach recommended for medium complexity")
-        recommendations.append("• Plan iterative validation checkpoints")
+        recommendations.extend(
+            [
+                "• Balanced approach recommended for medium complexity",
+                "• Plan iterative validation checkpoints",
+            ]
+        )
 
     # Effort-based recommendations
     total_effort = metrics["estimated_effort_days"]
     if total_effort > 30:
-        recommendations.append("• Establish dedicated migration team")
-        recommendations.append("• Consider parallel migration tracks")
+        recommendations.extend(
+            [
+                "• Establish dedicated migration team",
+                "• Consider parallel migration tracks",
+            ]
+        )
     else:
         recommendations.append("• Single developer can handle migration with oversight")
 
@@ -1753,11 +1763,11 @@ def _generate_migration_recommendations_from_assessment(
         a for a in assessments if a["metrics"]["custom_resources"] > 0
     ]
     if custom_resource_cookbooks:
-        recommendations.append(
-            f"• {len(custom_resource_cookbooks)} cookbooks need custom resource conversion"
-        )
-        recommendations.append(
-            "• Prioritize custom resource analysis and conversion strategy"
+        recommendations.extend(
+            [
+                f"• {len(custom_resource_cookbooks)} cookbooks need custom resource conversion",
+                "• Prioritize custom resource analysis and conversion strategy",
+            ]
         )
 
     return "\n".join(recommendations)
@@ -2358,23 +2368,19 @@ def _generate_phased_migration_phases(assessments: list, timeline_weeks: int) ->
 
     weeks_per_phase = timeline_weeks // 3
 
-    phases.append(
-        f"**Phase 1 (Weeks 1-{weeks_per_phase}):** Foundation & Low Complexity"
+    phases.extend(
+        [
+            f"**Phase 1 (Weeks 1-{weeks_per_phase}):** Foundation & Low Complexity",
+            f"  • {len(phase1)} low-complexity cookbooks",
+            "  • Setup AWX environment and CI/CD",
+            f"\n**Phase 2 (Weeks {weeks_per_phase + 1}-{weeks_per_phase * 2}):** Medium Complexity",
+            f"  • {len(phase2)} medium-complexity cookbooks",
+            "  • Parallel conversion and testing",
+            f"\n**Phase 3 (Weeks {weeks_per_phase * 2 + 1}-{timeline_weeks}):** High Complexity & Finalization",
+            f"  • {len(phase3)} high-complexity cookbooks",
+            "  • Final testing and deployment",
+        ]
     )
-    phases.append(f"  • {len(phase1)} low-complexity cookbooks")
-    phases.append("  • Setup AWX environment and CI/CD")
-
-    phases.append(
-        f"\n**Phase 2 (Weeks {weeks_per_phase + 1}-{weeks_per_phase * 2}):** Medium Complexity"
-    )
-    phases.append(f"  • {len(phase2)} medium-complexity cookbooks")
-    phases.append("  • Parallel conversion and testing")
-
-    phases.append(
-        f"\n**Phase 3 (Weeks {weeks_per_phase * 2 + 1}-{timeline_weeks}):** High Complexity & Finalization"
-    )
-    phases.append(f"  • {len(phase3)} high-complexity cookbooks")
-    phases.append("  • Final testing and deployment")
 
     return "\n".join(phases)
 

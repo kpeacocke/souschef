@@ -44,7 +44,6 @@ def _validate_containment(
     base_str: str,
     *,
     safe_base: str,
-    path_obj: Path | None = None,
 ) -> bool:
     """Validate that a candidate path remains within a trusted base."""
 
@@ -132,7 +131,6 @@ def _ensure_within_base_path(path_obj: Path, base_path: Path) -> Path:
         candidate_str,
         base_str,
         safe_base=str(safe_base),
-        path_obj=normalized_candidate,
     )
     return normalized_candidate
 

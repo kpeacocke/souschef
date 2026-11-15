@@ -209,6 +209,12 @@ def test_extract_pillars_direct_access() -> None:
     assert pillars["db_password"]["access"] == "direct"
 
 
+def test_extract_pillars_nested_access() -> None:
+    """Nested Salt Pillar access is retained as a dotted key path."""
+    pillars = _extract_pillars("{{ pillar['app']['user']['name'] }}")
+    assert "app.user.name" in pillars
+
+
 def test_extract_pillars_get_with_default() -> None:
     """pillar.get('key', 'default') pattern is detected."""
     content = "name: {{ pillar.get('port', '5432') }}"
@@ -312,6 +318,21 @@ nginx_service:
     modules = [s["module"] for s in states]
     assert "pkg" in modules
     assert "service" in modules
+
+
+def test_parse_sls_states_preserves_jinja_if_condition() -> None:
+    """A Salt Jinja if condition is attached to contained state entries."""
+    content = """\
+{% if grains['os_family'] == 'Debian' %}
+postgresql_repository:
+    pkgrepo.managed:
+        - name: deb http://apt.example.test stable main
+{% endif %}
+"""
+
+    states = _parse_sls_states(content)
+
+    assert states[0]["when"] == "ansible_facts['os_family'] == 'Debian'"
 
 
 def test_parse_sls_states_skips_include() -> None:

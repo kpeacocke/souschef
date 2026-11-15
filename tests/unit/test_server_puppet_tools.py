@@ -135,6 +135,19 @@ def test_mcp_convert_puppet_module_to_ansible_success(tmp_path: Path) -> None:
     assert isinstance(playbook, list)
 
 
+def test_mcp_convert_puppet_module_forwards_hiera_os_family(tmp_path: Path) -> None:
+    """MCP module conversion forwards selected Hiera overlay options."""
+    with patch(
+        "souschef.server._convert_puppet_module_to_ansible", return_value="---"
+    ) as mock_converter:
+        result = convert_puppet_module_to_ansible(
+            str(tmp_path), environment="production", os_family="Debian"
+        )
+
+    mock_converter.assert_called_once_with(str(tmp_path), "production", "Debian")
+    assert result == "---"
+
+
 def test_mcp_convert_puppet_module_no_manifests(tmp_path: Path) -> None:
     """Test that convert_puppet_module_to_ansible handles empty directories."""
     result = convert_puppet_module_to_ansible(str(tmp_path))
