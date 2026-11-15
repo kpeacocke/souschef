@@ -6,24 +6,117 @@ and performance regression prevention.
 """
 
 import asyncio
+import json
 import tracemalloc
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from souschef.server import (
+    convert_bash_to_ansible,
+    convert_cookbook_comprehensive,
+    convert_habitat_to_dockerfile,
+    convert_inspec_to_test,
+    convert_powershell,
+    convert_puppet_manifest_to_ansible,
     convert_resource_to_task,
+    convert_salt_pillar_to_vars,
+    convert_salt_to_ansible,
     generate_playbook_from_recipe,
     list_cookbook_structure,
     parse_attributes,
     parse_custom_resource,
+    parse_habitat_plan,
+    parse_inspec_profile,
+    parse_powershell,
+    parse_puppet_manifest,
     parse_recipe,
+    parse_salt_pillar,
+    parse_salt_sls,
+    parse_salt_top,
     parse_template,
     read_cookbook_metadata,
 )
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
+BENCHMARK_CORPUS_DIR = FIXTURES_DIR / "benchmark_corpus"
+BENCHMARK_CASES: list[dict[str, Any]] = json.loads(
+    (BENCHMARK_CORPUS_DIR / "cases.json").read_text(encoding="utf-8")
+)["cases"]
+_CORPUS_OPERATIONS: dict[str, Callable[..., str]] = {
+    "convert_bash_to_ansible": convert_bash_to_ansible,
+    "convert_habitat_to_dockerfile": convert_habitat_to_dockerfile,
+    "convert_inspec_to_test": convert_inspec_to_test,
+    "convert_powershell": convert_powershell,
+    "convert_puppet_manifest_to_ansible": convert_puppet_manifest_to_ansible,
+    "convert_salt_pillar_to_vars": convert_salt_pillar_to_vars,
+    "convert_salt_to_ansible": convert_salt_to_ansible,
+    "generate_playbook_from_recipe": generate_playbook_from_recipe,
+    "parse_attributes": parse_attributes,
+    "parse_custom_resource": parse_custom_resource,
+    "parse_habitat_plan": parse_habitat_plan,
+    "parse_inspec_profile": parse_inspec_profile,
+    "parse_powershell": parse_powershell,
+    "parse_puppet_manifest": parse_puppet_manifest,
+    "parse_recipe": parse_recipe,
+    "parse_salt_pillar": parse_salt_pillar,
+    "parse_salt_sls": parse_salt_sls,
+    "parse_salt_top": parse_salt_top,
+    "parse_template": parse_template,
+}
+
+
+def _run_benchmark_corpus_case(case: dict[str, Any]) -> str:
+    """Run one manifest-defined parser or converter and check its outcome."""
+    source_path = FIXTURES_DIR / case["path"]
+    operation = _CORPUS_OPERATIONS[case["operation"]]
+    result = operation(str(source_path), **case.get("arguments", {}))
+    assert isinstance(result, str)
+    assert result.strip()
+
+    if "contains" in case:
+        assert case["contains"] in result
+    if "json_status" in case:
+        assert json.loads(result)["status"] == case["json_status"]
+    if "json_key" in case:
+        assert case["json_key"] in json.loads(result)
+    if "json_expected" in case:
+        result_data = json.loads(result)
+        for key, value in case["json_expected"].items():
+            assert result_data.get(key) == value
+    if "json_minimums" in case:
+        result_data = json.loads(result)
+        for key, minimum in case["json_minimums"].items():
+            actual = result_data[key]
+            actual_count = actual if isinstance(actual, int) else len(actual)
+            assert actual_count >= minimum
+    if case["kind"] == "malformed":
+        assert "Traceback" not in result
+    return result
+
+
+def _run_benchmark_corpus_family(cases: list[dict[str, Any]]) -> tuple[int, int]:
+    """Run a fixed set of cases and return case/output sizes for benchmark use."""
+    results = [_run_benchmark_corpus_case(case) for case in cases]
+    return len(results), sum(map(len, results))
+
+
+@pytest.mark.parametrize(
+    "case",
+    BENCHMARK_CASES,
+    ids=[
+        f"{case['family']}-{case['version']}-{case['variant']}"
+        for case in BENCHMARK_CASES
+    ],
+)
+def test_benchmark_corpus_case_is_handled(
+    case: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Exercise every versioned corpus case, including malformed inputs."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(FIXTURES_DIR))
+    _run_benchmark_corpus_case(case)
 
 
 class TestMemoryUsage:
@@ -319,6 +412,40 @@ class TestConcurrentProcessing:
 
 class TestBenchmarkRegression:
     """Tests to prevent performance regressions."""
+
+    @pytest.mark.parametrize(
+        "family",
+        sorted({case["family"] for case in BENCHMARK_CASES}),
+    )
+    def test_benchmark_source_family_corpus(
+        self,
+        benchmark: Any,
+        family: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Benchmark all valid, complex, and malformed cases for one source."""
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(FIXTURES_DIR))
+        cases = [case for case in BENCHMARK_CASES if case["family"] == family]
+        case_count, output_size = benchmark(_run_benchmark_corpus_family, cases)
+
+        assert case_count == len(cases)
+        assert output_size > 0
+
+    def test_benchmark_full_cookbook_conversion(
+        self, benchmark: Any, tmp_path: Path
+    ) -> None:
+        """Benchmark full conversion against a fixed multi-file cookbook fixture."""
+        cookbook_path = FIXTURES_DIR / "apache2_cookbook"
+        output_path = tmp_path / "converted_roles"
+        output_path.mkdir()
+
+        result = benchmark(
+            convert_cookbook_comprehensive,
+            str(cookbook_path),
+            str(output_path),
+        )
+
+        assert "Cookbook Conversion Summary" in result
 
     def test_benchmark_parse_recipe(self, benchmark: Any) -> None:
         """Benchmark recipe parsing for regression detection."""

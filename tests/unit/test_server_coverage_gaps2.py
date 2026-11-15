@@ -436,7 +436,10 @@ def test_convert_recipes_parse_error(tmp_path: Path) -> None:
     (role_dir / "tasks").mkdir(parents=True)
     summary = _make_empty_conversion_summary()
 
-    with patch("souschef.server._parse_recipe", return_value="Error: bad recipe"):
+    with patch(
+        "souschef.converters.playbook.generate_playbook_from_recipe",
+        return_value="Error: bad recipe",
+    ):
         _convert_recipes(cookbook_dir, role_dir, summary)
 
     assert any("Failed to parse recipe" in e for e in summary["errors"])
@@ -457,12 +460,9 @@ def test_convert_recipes_exception_per_recipe(tmp_path: Path) -> None:
     (role_dir / "tasks").mkdir(parents=True)
     summary = _make_empty_conversion_summary()
 
-    with (
-        patch("souschef.server._parse_recipe", return_value="Resource 1: nginx"),
-        patch(
-            "souschef.converters.playbook.generate_playbook_from_recipe",
-            side_effect=RuntimeError("convert error"),
-        ),
+    with patch(
+        "souschef.converters.playbook.generate_playbook_from_recipe",
+        side_effect=RuntimeError("convert error"),
     ):
         _convert_recipes(cookbook_dir, role_dir, summary)
 
@@ -656,7 +656,8 @@ def test_convert_all_cookbooks_comprehensive_no_cookbooks(
     ):
         result = convert_all_cookbooks_comprehensive(str(cookbooks_dir), str(out_dir))
 
-    assert "Error" in result and "No Chef cookbooks" in result
+    assert "Error" in result
+    assert "No Chef cookbooks" in result
 
 
 # ---------------------------------------------------------------------------
@@ -813,7 +814,8 @@ def test_full_migration_tool_no_cookbooks(
     ):
         result = simulate_chef_to_awx_migration(str(cookbooks_dir), str(out_dir))
 
-    assert "Error" in result and "No Chef cookbooks" in result
+    assert "Error" in result
+    assert "No Chef cookbooks" in result
 
 
 # ---------------------------------------------------------------------------

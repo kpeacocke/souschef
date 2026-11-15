@@ -12,6 +12,7 @@
         "SonarSource.sonarlint-vscode",
         "Progress.chef",
         "redhat.ansible",
-        "golang.Go"
+        "golang.Go",
+        "ms-vscode.PowerShell"
     ]
 }

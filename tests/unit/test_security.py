@@ -6,7 +6,9 @@ prevent directory traversal attacks (CWE-22) and path manipulation
 vulnerabilities.
 """
 
+import os
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -14,6 +16,7 @@ from souschef.core.path_utils import (
     _ensure_within_base_path,
     _get_workspace_root,
     _normalize_path,
+    _resolve_path_under_base,
     _safe_join,
     _validate_relative_parts,
     _validated_candidate,
@@ -30,6 +33,21 @@ from souschef.core.path_utils import (
 
 class TestPathContainmentSecurity:
     """Test path containment validation against directory traversal attacks."""
+
+    def test_resolve_path_under_base_checks_realpath_once(self, tmp_path: Path) -> None:
+        """A path resolution performs one full realpath containment pass."""
+        base = tmp_path / "workspace"
+        base.mkdir()
+        target = base / "recipe.rb"
+
+        with patch(
+            "souschef.core.path_utils.os.path.realpath",
+            wraps=os.path.realpath,
+        ) as realpath:
+            result = _resolve_path_under_base(target, base)
+
+        assert result == target
+        assert realpath.call_count == 2
 
     def test_ensure_within_base_path_basic_valid(self, tmp_path):
         """Test that valid paths within base are accepted."""

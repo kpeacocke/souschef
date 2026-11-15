@@ -42,6 +42,7 @@ ENV/
 # Testing & Coverage
 # ──────────────────────────────────────────────
 .pytest_cache/
+.benchmarks/
 .coverage
 coverage.xml
 coverage.json

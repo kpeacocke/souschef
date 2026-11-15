@@ -353,6 +353,33 @@ def your_command(parameter: str) -> None:
 
 ### Performance Testing
 
+End-to-end cookbook conversion is benchmarked against the checked-in
+`apache2_cookbook` fixture in `tests/integration/test_performance.py`. Keep that
+fixture fixed so comparisons measure code changes rather than workload drift.
+Run the benchmark twice on the same machine and under similar system load:
+
+```bash
+poetry run pytest tests/integration/test_performance.py -k full_cookbook_conversion --benchmark-only --benchmark-autosave
+poetry run pytest tests/integration/test_performance.py -k full_cookbook_conversion --benchmark-only --benchmark-compare
+```
+
+The versioned migration corpus in
+`tests/integration/fixtures/benchmark_corpus/cases.json` covers Chef, Bash,
+PowerShell, Puppet, Salt, InSpec, and Habitat with valid, complex, and malformed
+cases. Run and compare the seven per-family workloads the same way:
+
+```bash
+poetry run pytest tests/integration/test_performance.py -k benchmark_source_family_corpus --benchmark-only --benchmark-autosave
+poetry run pytest tests/integration/test_performance.py -k benchmark_source_family_corpus --benchmark-only --benchmark-compare
+```
+
+The first command stores a local baseline under `.benchmarks/`; the second
+compares against the latest saved run. Review median and mean together, repeat
+surprising results, and autosave a new baseline only after confirming the
+change improves the same workload without weakening correctness or security.
+Avoid hard timing assertions in ordinary CI, where runner load and hardware can
+make small differences noisy.
+
 ```python
 def test_parse_large_recipe(benchmark):
     """Benchmark parsing performance."""

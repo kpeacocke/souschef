@@ -49,6 +49,9 @@
         "ghcr.io/devcontainers/features/go:1": {
             "version": "1.24",
             "golangCILintVersion": "1.60.3"
+        },
+        "ghcr.io/devcontainers/features/powershell:1": {
+            "version": "latest"
         }
     },
     "customizations": {
@@ -126,6 +129,7 @@
                 "Progress.chef",
                 "redhat.ansible",
                 "zbr.vscode-ansible",
+                "ms-vscode.PowerShell",
                 "ms-vscode.test-adapter-converter",
                 "hashicorp.terraform"
             ]

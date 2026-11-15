@@ -121,12 +121,12 @@ def test_sanitize_cookbook_paths_empty_parts() -> None:
 
 
 def test_create_role_structure_path_traversal(tmp_path: Path) -> None:
-    """RuntimeError raised for unsafe role path – server.py:3853."""
+    """Reject unsafe role paths through the shared safe-join guard."""
     from souschef.server import _create_role_structure
 
     with (
-        patch("souschef.server.os.path.commonpath", return_value="/different/path"),
-        pytest.raises(RuntimeError, match="Unsafe role path"),
+        patch("souschef.server._safe_join", side_effect=ValueError("unsafe role")),
+        pytest.raises(ValueError, match="unsafe role"),
     ):
         _create_role_structure(tmp_path, "somerole")
 
@@ -137,7 +137,7 @@ def test_convert_recipes_path_traversal(tmp_path: Path) -> None:
 
     summary: dict = {"warnings": [], "errors": [], "converted_files": []}
     with (
-        patch("souschef.server.os.path.commonpath", return_value="/different/path"),
+        patch("souschef.server._safe_join", side_effect=ValueError("unsafe path")),
         pytest.raises(RuntimeError, match="Unsafe recipes path"),
     ):
         _convert_recipes(tmp_path, tmp_path / "role", summary)
@@ -187,13 +187,15 @@ def test_convert_templates_json_decode_error(tmp_path: Path) -> None:
 
 def test_validate_conversion_paths_bad_output(tmp_path: Path) -> None:
     """ValueError for bad output path – server.py:4252-4253."""
+    cookbooks = tmp_path / "cookbooks"
+    cookbooks.mkdir()
     with (
         pytest.raises(ValueError, match="Output path"),
+        patch("souschef.server._get_workspace_root", return_value=tmp_path),
         patch(
             "souschef.server._ensure_within_base_path",
-            side_effect=[tmp_path / "cookbooks", ValueError("escapes")],
+            side_effect=[cookbooks, ValueError("escapes")],
         ),
-        patch("souschef.core.path_utils.safe_exists", return_value=True),
     ):
         _validate_conversion_paths(str(tmp_path), "/../../bad")
 
@@ -1505,7 +1507,8 @@ def test_generate_cache_key_oserror_hash(tmp_path: Path) -> None:
         side_effect=OSError("permission denied"),
     ):
         key = manager.generate_cache_key(str(tmp_path), "anthropic", "claude-3")
-    assert isinstance(key, str) and len(key) > 0
+    assert isinstance(key, str)
+    assert len(key) > 0
 
 
 def test_postgres_storage_get_conversion_history_no_cookbook() -> None:

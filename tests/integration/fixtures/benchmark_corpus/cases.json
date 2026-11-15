@@ -1,0 +1,270 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "family": "chef",
+      "version": "12.x",
+      "variant": "legacy-recipe",
+      "kind": "valid",
+      "operation": "parse_recipe",
+      "path": "legacy_chef12_cookbook/recipes/default.rb",
+      "contains": "Resource"
+    },
+    {
+      "family": "chef",
+      "version": "14.x",
+      "variant": "database-recipe",
+      "kind": "complex",
+      "operation": "parse_recipe",
+      "path": "mysql_cookbook/recipes/server.rb",
+      "contains": "Resource"
+    },
+    {
+      "family": "chef",
+      "version": "15.x",
+      "variant": "web-playbook",
+      "kind": "complex",
+      "operation": "generate_playbook_from_recipe",
+      "path": "apache2_cookbook/recipes/default.rb",
+      "contains": "---"
+    },
+    {
+      "family": "chef",
+      "version": "16.x",
+      "variant": "application-recipe",
+      "kind": "valid",
+      "operation": "parse_recipe",
+      "path": "nodejs_cookbook/recipes/app.rb",
+      "contains": "Resource"
+    },
+    {
+      "family": "chef",
+      "version": "17.x",
+      "variant": "container-recipe",
+      "kind": "complex",
+      "operation": "generate_playbook_from_recipe",
+      "path": "docker_cookbook/recipes/default.rb",
+      "contains": "---"
+    },
+    {
+      "family": "chef",
+      "version": "15.x",
+      "variant": "nested-attributes",
+      "kind": "complex",
+      "operation": "parse_attributes",
+      "path": "apache2_cookbook/attributes/default.rb",
+      "contains": "apache"
+    },
+    {
+      "family": "chef",
+      "version": "15.x",
+      "variant": "erb-template",
+      "kind": "valid",
+      "operation": "parse_template",
+      "path": "apache2_cookbook/templates/default/apache2.conf.erb",
+      "contains": "jinja2_template"
+    },
+    {
+      "family": "chef",
+      "version": "14.x",
+      "variant": "custom-resource",
+      "kind": "complex",
+      "operation": "parse_custom_resource",
+      "path": "mysql_cookbook/resources/database.rb",
+      "contains": "resource_name"
+    },
+    {
+      "family": "chef",
+      "version": "17.x",
+      "variant": "incomplete-resource",
+      "kind": "malformed",
+      "operation": "parse_recipe",
+      "path": "benchmark_corpus/chef_malformed.rb",
+      "contains": "Warning: No Chef resources"
+    },
+    {
+      "family": "bash",
+      "version": "4.4",
+      "variant": "legacy-provisioning",
+      "kind": "valid",
+      "operation": "convert_bash_to_ansible",
+      "path": "benchmark_corpus/bash_4_4.sh",
+      "json_status": "success"
+    },
+    {
+      "family": "bash",
+      "version": "5.2",
+      "variant": "multi-component",
+      "kind": "complex",
+      "operation": "convert_bash_to_ansible",
+      "path": "benchmark_corpus/bash_5_2_complex.sh",
+      "json_status": "success"
+    },
+    {
+      "family": "bash",
+      "version": "5.2",
+      "variant": "incomplete-control-flow",
+      "kind": "malformed",
+      "operation": "convert_bash_to_ansible",
+      "path": "benchmark_corpus/bash_5_2_broken.sh",
+      "json_status": "success",
+      "json_minimums": {"tasks": 1}
+    },
+    {
+      "family": "powershell",
+      "version": "5.1",
+      "variant": "iis-service",
+      "kind": "valid",
+      "operation": "convert_powershell",
+      "path": "benchmark_corpus/powershell_5_1.ps1",
+      "json_status": "success"
+    },
+    {
+      "family": "powershell",
+      "version": "7.4",
+      "variant": "windows-host",
+      "kind": "complex",
+      "operation": "convert_powershell",
+      "path": "benchmark_corpus/powershell_7_4_complex.ps1",
+      "json_status": "success"
+    },
+    {
+      "family": "powershell",
+      "version": "7.4",
+      "variant": "unfinished-block",
+      "kind": "malformed",
+      "operation": "convert_powershell",
+      "path": "benchmark_corpus/powershell_7_4_broken.ps1",
+      "json_status": "success",
+      "json_minimums": {"win_shell_fallbacks": 1}
+    },
+    {
+      "family": "puppet",
+      "version": "6.x",
+      "variant": "webserver",
+      "kind": "valid",
+      "operation": "convert_puppet_manifest_to_ansible",
+      "path": "benchmark_corpus/puppet_6.pp",
+      "contains": "ansible.builtin.package"
+    },
+    {
+      "family": "puppet",
+      "version": "8.x",
+      "variant": "hiera-and-virtual-resources",
+      "kind": "complex",
+      "operation": "convert_puppet_manifest_to_ansible",
+      "path": "benchmark_corpus/puppet_8_complex.pp",
+      "contains": "ansible.builtin.package"
+    },
+    {
+      "family": "puppet",
+      "version": "8.x",
+      "variant": "unfinished-resource",
+      "kind": "malformed",
+      "operation": "convert_puppet_manifest_to_ansible",
+      "path": "benchmark_corpus/puppet_8_broken.pp",
+      "contains": "ansible.builtin.package"
+    },
+    {
+      "family": "salt",
+      "version": "3006",
+      "variant": "package-and-service",
+      "kind": "valid",
+      "operation": "convert_salt_to_ansible",
+      "path": "benchmark_corpus/salt_3006.sls",
+      "json_key": "playbook"
+    },
+    {
+      "family": "salt",
+      "version": "3007",
+      "variant": "jinja-requisites-template",
+      "kind": "complex",
+      "operation": "convert_salt_to_ansible",
+      "path": "benchmark_corpus/salt_3007_complex.sls",
+      "json_key": "playbook"
+    },
+    {
+      "family": "salt",
+      "version": "3007",
+      "variant": "invalid-yaml-shape",
+      "kind": "malformed",
+      "operation": "convert_salt_to_ansible",
+      "path": "benchmark_corpus/salt_3007_broken.sls",
+      "json_key": "playbook",
+      "json_expected": {"tasks_converted": 0}
+    },
+    {
+      "family": "salt",
+      "version": "3007",
+      "variant": "nested-pillar",
+      "kind": "complex",
+      "operation": "convert_salt_pillar_to_vars",
+      "path": "benchmark_corpus/salt_pillar_3007.sls",
+      "json_key": "vars_file"
+    },
+    {
+      "family": "salt",
+      "version": "3007",
+      "variant": "target-matrix",
+      "kind": "valid",
+      "operation": "parse_salt_top",
+      "path": "benchmark_corpus/salt_top_3007.sls",
+      "contains": "environments"
+    },
+    {
+      "family": "inspec",
+      "version": "4.x",
+      "variant": "package-control",
+      "kind": "valid",
+      "operation": "convert_inspec_to_test",
+      "path": "benchmark_corpus/inspec_4.rb",
+      "contains": "import pytest"
+    },
+    {
+      "family": "inspec",
+      "version": "5.x",
+      "variant": "multi-resource-controls",
+      "kind": "complex",
+      "operation": "convert_inspec_to_test",
+      "path": "benchmark_corpus/inspec_5_complex.rb",
+      "contains": "import pytest"
+    },
+    {
+      "family": "inspec",
+      "version": "5.x",
+      "variant": "unfinished-control",
+      "kind": "malformed",
+      "operation": "parse_inspec_profile",
+      "path": "benchmark_corpus/inspec_5_broken.rb",
+      "json_expected": {"controls_count": 1}
+    },
+    {
+      "family": "habitat",
+      "version": "1.6",
+      "variant": "nginx-plan",
+      "kind": "complex",
+      "operation": "convert_habitat_to_dockerfile",
+      "path": "habitat_package/plan.sh",
+      "contains": "FROM"
+    },
+    {
+      "family": "habitat",
+      "version": "1.7",
+      "variant": "postgres-plan",
+      "kind": "complex",
+      "operation": "convert_habitat_to_dockerfile",
+      "path": "habitat_package/plan_postgres.sh",
+      "contains": "FROM"
+    },
+    {
+      "family": "habitat",
+      "version": "1.7",
+      "variant": "incomplete-plan",
+      "kind": "malformed",
+      "operation": "parse_habitat_plan",
+      "path": "benchmark_corpus/habitat_1_7_broken.sh",
+      "json_key": "package",
+      "json_expected": {"callbacks": {}}
+    }
+  ]
+}

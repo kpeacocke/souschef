@@ -9,11 +9,13 @@ import pytest
 from souschef.server import (
     _build_simulated_chef_inventory,
     _build_simulation_runlist,
+    _convert_single_recipe,
     _find_cookbook_directories,
     _generate_batch_conversion_report,
     _parse_assessment_data,
     _validate_conversion_paths,
     convert_all_cookbooks_comprehensive,
+    convert_cookbook_comprehensive,
     simulate_chef_to_awx_migration,
 )
 
@@ -74,6 +76,132 @@ def test_find_cookbook_directories(tmp_path: Path) -> None:
 
     assert valid in found
     assert invalid not in found
+
+
+def test_find_cookbook_directories_skips_symlinks_outside_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Do not treat an external symlink as a trusted cookbook directory."""
+    workspace = tmp_path / "workspace"
+    cookbooks = workspace / "cookbooks"
+    external = tmp_path / "external"
+    cookbooks.mkdir(parents=True)
+    external.mkdir()
+    (external / "metadata.rb").write_text("name 'external'", encoding="utf-8")
+    link = cookbooks / "external_link"
+    try:
+        link.symlink_to(external, target_is_directory=True)
+    except OSError as exc:
+        pytest.skip(f"Symlinks are unavailable: {exc}")
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(workspace))
+
+    assert _find_cookbook_directories(cookbooks) == []
+
+
+def test_convert_single_recipe_does_not_parse_before_playbook_generation(
+    tmp_path: Path,
+) -> None:
+    """Recipe parsing is owned by the generator and performed only once."""
+    recipes_dir = tmp_path / "cookbook" / "recipes"
+    recipes_dir.mkdir(parents=True)
+    recipe = recipes_dir / "default.rb"
+    recipe.write_text("package 'nginx'", encoding="utf-8")
+    role_dir = tmp_path / "role"
+    role_dir.mkdir()
+    summary = {"converted_files": [], "errors": []}
+    playbook_yaml = (
+        "---\n- hosts: all\n  tasks:\n  - name: Install nginx\n"
+        "    ansible.builtin.debug:\n      msg: ok\n"
+    )
+
+    with patch("souschef.server._parse_recipe") as duplicate_parser:
+        handlers = _convert_single_recipe(
+            recipe,
+            recipes_dir,
+            "cookbook",
+            role_dir,
+            summary,
+            lambda _: playbook_yaml,
+        )
+
+    duplicate_parser.assert_not_called()
+    assert handlers == []
+    assert len(summary["converted_files"]) == 1
+
+
+def test_convert_single_recipe_records_generator_parse_error(tmp_path: Path) -> None:
+    """Generator parse errors are recorded without trying to load YAML."""
+    recipes_dir = tmp_path / "cookbook" / "recipes"
+    recipes_dir.mkdir(parents=True)
+    recipe = recipes_dir / "broken.rb"
+    recipe.write_text("invalid", encoding="utf-8")
+    role_dir = tmp_path / "role"
+    role_dir.mkdir()
+    summary = {"converted_files": [], "errors": []}
+
+    handlers = _convert_single_recipe(
+        recipe,
+        recipes_dir,
+        "cookbook",
+        role_dir,
+        summary,
+        lambda _: "Error: invalid recipe",
+    )
+
+    assert handlers == []
+    assert "Failed to parse recipe broken" in summary["errors"][0]
+
+
+def test_validate_conversion_paths_uses_configured_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Batch paths outside configured workspace are rejected even under CWD."""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    cookbooks = tmp_path / "cookbooks"
+    cookbooks.mkdir()
+    output = tmp_path / "output"
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(workspace))
+
+    with pytest.raises(ValueError, match="outside workspace"):
+        _validate_conversion_paths(str(cookbooks), str(output))
+
+
+def test_convert_cookbook_rejects_source_outside_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Single cookbook conversion must reject external source directories."""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    external = tmp_path / "external_cookbook"
+    external.mkdir()
+    (external / "metadata.rb").write_text("name 'external'", encoding="utf-8")
+    output = workspace / "output"
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(workspace))
+
+    result = convert_cookbook_comprehensive(str(external), str(output))
+
+    assert "outside" in result.lower() or "traversal" in result.lower()
+    assert not output.exists()
+
+
+def test_convert_cookbook_rejects_output_outside_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Single cookbook conversion must not create output outside workspace."""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    cookbook = workspace / "cookbook"
+    cookbook.mkdir()
+    (cookbook / "metadata.rb").write_text("name 'safe'", encoding="utf-8")
+    external_output = tmp_path / "external_output"
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(workspace))
+
+    result = convert_cookbook_comprehensive(str(cookbook), str(external_output))
+
+    assert "outside" in result.lower() or "traversal" in result.lower()
+    assert not external_output.exists()
 
 
 def test_convert_all_cookbooks_comprehensive_no_cookbooks(tmp_path: Path) -> None:

@@ -6,7 +6,6 @@
 import ast
 import importlib
 import json
-import os
 import re
 from pathlib import Path
 from typing import Any
@@ -875,13 +874,16 @@ def _validate_plan_paths(plan_paths: str) -> None:
         _validate_path_length(path, _PLAN_PATH_LABEL)
 
 
-def _normalise_workspace_path(path: str, label: str) -> Path:
+def _normalise_workspace_path(
+    path: str, label: str, workspace_root: Path | None = None
+) -> Path:
     """
     Normalise and validate a user path against the workspace root.
 
     Args:
         path: User-provided path value.
         label: Label used in error messages.
+        workspace_root: Optional preloaded trusted workspace root.
 
     Returns:
         Normalised, workspace-contained path.
@@ -893,8 +895,8 @@ def _normalise_workspace_path(path: str, label: str) -> Path:
     _validate_path_length(path, label)
     candidate = _normalize_path(path)
     _check_symlink_safety(candidate, Path(path))
-    workspace_root = _get_workspace_root()
-    return _ensure_within_base_path(candidate, workspace_root)
+    trusted_root = workspace_root or _get_workspace_root()
+    return _ensure_within_base_path(candidate, trusted_root)
 
 
 def _normalise_plan_paths(plan_paths: str) -> list[str]:
@@ -4223,13 +4225,18 @@ def convert_cookbook_comprehensive(
 
     """
     try:
-        from souschef.core.path_utils import _normalize_path
+        workspace_root = _get_workspace_root()
+        cookbook_dir = _normalise_workspace_path(
+            cookbook_path, _COOKBOOK_PATH_LABEL, workspace_root
+        )
+        output_dir = _normalise_workspace_path(
+            output_path, "Output path", workspace_root
+        )
 
-        cookbook_dir = _normalize_path(cookbook_path)
-        output_dir = _normalize_path(output_path)
-
-        if not cookbook_dir.exists():  # NOSONAR
+        if not cookbook_dir.exists():
             return f"Error: Cookbook path does not exist: {cookbook_path}"
+        if not cookbook_dir.is_dir():
+            return f"Error: Cookbook path is not a directory: {cookbook_path}"
 
         # Parse assessment data if provided
         assessment = {}
@@ -4319,24 +4326,21 @@ def _create_role_structure(output_dir: Path, role_name: str) -> Path:
     # Validate role_name to ensure it's safe for filesystem operations
     _validate_role_name(role_name)
 
-    base = os.path.realpath(str(output_dir))
-    role_dir_str = os.path.realpath(os.path.join(base, role_name))  # noqa: PTH111, PTH118
-    if os.path.commonpath([base, role_dir_str]) != base:
-        raise RuntimeError("Unsafe role path outside output directory")
-    role_dir = Path(role_dir_str)
+    workspace_root = _get_workspace_root()
+    safe_output_dir = _ensure_within_base_path(output_dir, workspace_root)
+    role_dir = _safe_join(safe_output_dir, role_name)
     role_tasks_dir = role_dir / "tasks"
     role_templates_dir = role_dir / "templates"
     role_vars_dir = role_dir / "vars"
     role_defaults_dir = role_dir / "defaults"
 
-    # All paths are validated via os.path.commonpath containment check above
     for directory in [
         role_tasks_dir,
         role_templates_dir,
         role_vars_dir,
         role_defaults_dir,
     ]:
-        directory.mkdir(parents=True, exist_ok=True)  # nosonar: S2083
+        safe_mkdir(directory, workspace_root, parents=True, exist_ok=True)
 
     return role_dir
 
@@ -4413,14 +4417,13 @@ def _convert_single_recipe(
     """Convert one Chef recipe into a role task list and return its handlers."""
     validated_recipe = _validated_candidate(recipe_file, recipes_dir)
     recipe_name = validated_recipe.stem
-    parse_result = _parse_recipe(str(validated_recipe))
-    if parse_result.startswith("Error:"):
+    playbook_yaml = generate_playbook_from_recipe(str(validated_recipe))
+    if playbook_yaml.startswith(ERROR_PREFIX):
         conversion_summary["errors"].append(
-            f"Failed to parse recipe {recipe_name}: {parse_result}"
+            f"Failed to parse recipe {recipe_name}: {playbook_yaml}"
         )
         return []
 
-    playbook_yaml = generate_playbook_from_recipe(str(validated_recipe))
     playbook = yaml.safe_load(playbook_yaml)
     if (
         not isinstance(playbook, list)
@@ -4843,22 +4846,23 @@ def _validate_conversion_paths(
     cookbooks_path: str, output_path: str
 ) -> tuple[Path, Path]:
     """Validate and return Path objects for conversion paths."""
-    base_dir = Path.cwd().resolve()
-
-    cookbooks_candidate = _normalize_path(cookbooks_path)
     try:
-        cookbooks_dir = _ensure_within_base_path(cookbooks_candidate, base_dir)
+        workspace_root = _get_workspace_root()
+        cookbooks_dir = _normalise_workspace_path(
+            cookbooks_path, "Cookbooks path", workspace_root
+        )
     except ValueError as e:
         raise ValueError(f"Cookbooks path is invalid or outside workspace: {e}") from e
 
-    from souschef.core.path_utils import safe_exists
+    if not cookbooks_dir.is_dir():
+        raise ValueError(
+            f"Cookbooks path does not exist or is not a directory: {cookbooks_path}"
+        )
 
-    if not safe_exists(cookbooks_dir, base_dir):
-        raise ValueError(f"Cookbooks path does not exist: {cookbooks_path}")
-
-    output_candidate = _normalize_path(output_path)
     try:
-        output_dir = _ensure_within_base_path(output_candidate, base_dir)
+        output_dir = _normalise_workspace_path(
+            output_path, "Output path", workspace_root
+        )
     except ValueError as e:
         raise ValueError(f"Output path is invalid or outside workspace: {e}") from e
 
@@ -4877,13 +4881,23 @@ def _parse_assessment_data(assessment_data: str) -> dict[Any, Any]:
         raise ValueError(f"Invalid assessment data JSON: {assessment_data}") from e
 
 
-def _find_cookbook_directories(cookbooks_dir: Path) -> list[Path]:
+def _find_cookbook_directories(
+    cookbooks_dir: Path, workspace_root: Path | None = None
+) -> list[Path]:
     """Find all cookbook directories containing metadata.rb files."""
-    return [
-        item
-        for item in cookbooks_dir.iterdir()
-        if item.is_dir() and (item / METADATA_RB).exists()
-    ]
+    trusted_root = workspace_root or _get_workspace_root()
+    cookbook_dirs: list[Path] = []
+    for item in cookbooks_dir.iterdir():
+        try:
+            cookbook_dir = _ensure_within_base_path(item, trusted_root)
+            if not cookbook_dir.is_dir():
+                continue
+            metadata_file = _safe_join(cookbook_dir, METADATA_RB)
+        except ValueError:
+            continue
+        if metadata_file.is_file():
+            cookbook_dirs.append(cookbook_dir)
+    return cookbook_dirs
 
 
 def _initialize_conversion_summary(total_cookbooks: int) -> dict:

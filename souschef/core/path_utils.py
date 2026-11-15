@@ -238,20 +238,15 @@ def _resolve_path_under_base(path_obj: Path | str, base_path: Path | str) -> Pat
     """
     Resolve ``path_obj`` and enforce that it remains under ``base_path``.
 
-    This function performs a two-stage containment check:
+     This function performs pure path normalisation followed by one containment
+     check:
 
-    1. **normpath + commonpath (BARRIER 1)** — pure string normalisation (no
-       filesystem I/O on user-controlled data) that collapses all ``..`` and
-       repeated-separator sequences.  ``os.path.commonpath`` is the CodeQL-
-       recognised barrier for ``py/path-injection``.
+     1. **Pure normalisation** — ``os.path.normpath`` collapses ``..`` and
+         repeated separators without filesystem I/O on user-controlled data.
 
-    2. **realpath + commonpath (BARRIER 2, inline)** — after BARRIER 1
-       sanitises the candidate, ``os.path.realpath`` is called in the *same
-       inline scope* to follow any symlinks and produce the true filesystem
-       path.  A second ``os.path.commonpath`` check then confirms that the
-       resolved target also lies within the workspace.  Calling ``realpath``
-       *inline* (not in a helper) after the first barrier is CodeQL-safe
-       because the guard and the filesystem call share the same function scope.
+     2. **Containment validation** — ``_ensure_within_base_path`` checks both
+         lexical and resolved paths with ``commonpath``/``realpath``, preventing
+         traversal and symlink escapes while returning the validated candidate.
 
     Tilde (``~``) expansion is intentionally **not** performed on user-supplied
     paths.  The UI layer (or any trusted caller) must call
@@ -260,8 +255,8 @@ def _resolve_path_under_base(path_obj: Path | str, base_path: Path | str) -> Pat
     ``py/path-injection`` filesystem sink (reads ``/etc/passwd`` for
     ``~user`` form).
 
-    SECURITY: This function implements the full two-barrier path-injection
-    protection model and is registered as a standard sanitiser in
+    SECURITY: This function uses the standard path-injection sanitiser
+    registered in
     .github/codeql/ for CodeQL static analysis. Every path returned from this
     function is guaranteed to remain within the base directory.
     """
@@ -291,17 +286,6 @@ def _resolve_path_under_base(path_obj: Path | str, base_path: Path | str) -> Pat
     else:
         relative = _validate_relative_parts(raw_path.parts)
         candidate_str = os.path.normpath(str(Path(base_str) / relative))
-
-    # BARRIER 1: use realpath-based containment first so equivalent paths that
-    # differ only through filesystem aliases (for example /var vs /private/var)
-    # are accepted when they resolve to the same location.  The later
-    # name-based check preserves the older syntactic containment semantics for
-    # regular paths that stay within the trusted base.
-    try:
-        _validate_containment(candidate_str, base_str, safe_base=str(safe_base))
-    except ValueError as exc:
-        msg = f"Path traversal attempt: escapes {safe_base}"
-        raise ValueError(msg) from exc
 
     return _ensure_within_base_path(Path(candidate_str), Path(base_str))
 
