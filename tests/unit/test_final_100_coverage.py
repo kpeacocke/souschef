@@ -217,19 +217,19 @@ def test_check_ansible_eol_status_valid_version() -> None:
 
 
 def test_generate_handler_routing_config_exception_in_scan(tmp_path: Path) -> None:
-    """Exception in detect_handler_patterns is skipped – server.py:5551-5552."""
+    """Exceptions in handler scanning produce a JSON error response."""
     # Create a cookbook directory with a .rb file
     cookbook = tmp_path / "myCookbook"
-    cookbook.mkdir()
-    (cookbook / "handlers.rb").write_text("# handler content")
+    libraries = cookbook / "libraries"
+    libraries.mkdir(parents=True)
+    (libraries / "handlers.rb").write_text("# handler content")
 
     with patch(
         "souschef.converters.detect_handler_patterns",
         side_effect=RuntimeError("parse error"),
     ):
         result = generate_handler_routing_config(str(cookbook))
-    # Should not raise; result is a JSON string
-    assert isinstance(result, str)
+    assert json.loads(result)["status"] == "error"
 
 
 def test_plan_ansible_upgrade_with_env_ansible_exe(tmp_path: Path) -> None:

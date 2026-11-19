@@ -1418,11 +1418,11 @@ class TestGitHubAgentControlIntegration:
                 base_ref="main",
             )
 
-            assert "✅" in result
             assert "testorg/testrepo" in result
             assert "#123" in result
-            assert "pause_github_copilot_agent" in result
-            assert "stop_github_copilot_agent" in result
+            assert "No Copilot agent was assigned or started." in result
+            assert "base_ref" in result
+            assert "not sent to an" in result
 
     def test_pause_agent_workflow(self):
         """Test complete pause workflow."""
@@ -1440,9 +1440,8 @@ class TestGitHubAgentControlIntegration:
                 reason="Testing pause feature",
             )
 
-            assert "⏸️" in result
             assert "Testing pause feature" in result
-            assert "resume" in result.lower()
+            assert "No Copilot agent was paused." in result
 
     def test_stop_agent_workflow(self):
         """Test complete stop workflow."""
@@ -1460,9 +1459,8 @@ class TestGitHubAgentControlIntegration:
                 reason="Requirements changed",
             )
 
-            assert "🛑" in result
             assert "Requirements changed" in result
-            assert "cancelled" in result
+            assert "No Copilot agent was stopped." in result
 
     def test_resume_paused_agent_workflow(self):
         """Test resume workflow for paused agent."""
@@ -1484,9 +1482,8 @@ class TestGitHubAgentControlIntegration:
                 additional_instructions="Focus on performance",
             )
 
-            assert "▶️" in result
             assert "Focus on performance" in result
-            assert "continuing work" in result
+            assert "No Copilot agent was resumed." in result
 
     def test_resume_stopped_agent_failure(self):
         """Test that resuming stopped agent returns error."""
@@ -1501,9 +1498,8 @@ class TestGitHubAgentControlIntegration:
                 issue_number=123,
             )
 
-            assert "❌" in result
             assert "stopped" in result
-            assert "new assignment" in result
+            assert "No Copilot agent was resumed." in result
 
     def test_check_status_for_various_states(self):
         """Test status check for different agent states."""

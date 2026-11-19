@@ -22,14 +22,15 @@ class TestAssignCopilotAgent:
 
     @patch("souschef.github.agent_control._add_label_to_issue")
     def test_assign_copilot_success(self, mock_add_label):
-        """Test successful Copilot agent assignment."""
+        """Test adding a tracking label without claiming agent assignment."""
         result = assign_copilot_agent_to_issue(
             owner="testorg",
             repo="testrepo",
             issue_number=42,
         )
 
-        assert "✅ Copilot agent assigned" in result
+        assert "tracking label added" in result
+        assert "No Copilot agent was assigned or started" in result
         assert "#42" in result
         assert "testorg/testrepo" in result
         mock_add_label.assert_called_once_with(
@@ -38,7 +39,7 @@ class TestAssignCopilotAgent:
 
     @patch("souschef.github.agent_control._add_label_to_issue")
     def test_assign_copilot_with_base_ref(self, mock_add_label):
-        """Test agent assignment with custom base branch."""
+        """Test base_ref is explicitly reported as unused."""
         result = assign_copilot_agent_to_issue(
             owner="testorg",
             repo="testrepo",
@@ -46,8 +47,8 @@ class TestAssignCopilotAgent:
             base_ref="develop",
         )
 
-        assert "Base branch:** develop" in result
-        assert "✅" in result
+        assert "base_ref" in result
+        assert "No Copilot agent was assigned or started" in result
 
     @patch("souschef.github.agent_control._add_label_to_issue")
     def test_assign_copilot_with_instructions(self, mock_add_label):
@@ -59,7 +60,7 @@ class TestAssignCopilotAgent:
             custom_instructions="Focus on performance",
         )
 
-        assert "✅" in result
+        assert "custom_instructions" in result
         assert result  # Non-empty result
 
     @patch(
@@ -74,7 +75,7 @@ class TestAssignCopilotAgent:
             issue_number=42,
         )
 
-        assert "Error assigning" in result
+        assert "Error updating Copilot-agent tracking labels" in result
         assert "API error" in result
 
 
@@ -87,14 +88,15 @@ class TestPauseCopilotAgent:
     def test_pause_agent_success(
         self, mock_add_label, mock_remove_label, mock_add_comment
     ):
-        """Test successful agent pause."""
+        """Test pause labels/comments do not claim to pause an agent."""
         result = pause_copilot_agent(
             owner="testorg",
             repo="testrepo",
             issue_number=42,
         )
 
-        assert "⏸️ Pause request sent" in result
+        assert "Pause tracking state recorded" in result
+        assert "No Copilot agent was paused" in result
         assert "#42" in result
         mock_add_label.assert_called_once_with(
             "testorg", "testrepo", 42, LABEL_AGENT_PAUSED
@@ -136,7 +138,7 @@ class TestPauseCopilotAgent:
             issue_number=42,
         )
 
-        assert "Error pausing" in result
+        assert "Error updating Copilot-agent tracking state" in result
 
 
 class TestStopCopilotAgent:
@@ -148,14 +150,15 @@ class TestStopCopilotAgent:
     def test_stop_agent_success(
         self, mock_add_label, mock_remove_label, mock_add_comment
     ):
-        """Test successful agent stop."""
+        """Test stop labels/comments do not claim to stop an agent."""
         result = stop_copilot_agent(
             owner="testorg",
             repo="testrepo",
             issue_number=42,
         )
 
-        assert "🛑 Copilot agent stopped" in result
+        assert "Stop tracking state recorded" in result
+        assert "No Copilot agent was stopped" in result
         assert "#42" in result
         mock_add_label.assert_called_once_with(
             "testorg", "testrepo", 42, LABEL_AGENT_STOPPED
@@ -195,7 +198,7 @@ class TestStopCopilotAgent:
             issue_number=42,
         )
 
-        assert "Error stopping" in result
+        assert "Error updating Copilot-agent tracking state" in result
         assert "Stop failed" in result
 
 
@@ -209,14 +212,15 @@ class TestResumeCopilotAgent:
     def test_resume_paused_agent(
         self, mock_check, mock_remove_label, mock_add_label, mock_add_comment
     ):
-        """Test resuming a paused agent."""
+        """Test resume labels/comments do not claim to resume an agent."""
         result = resume_copilot_agent(
             owner="testorg",
             repo="testrepo",
             issue_number=42,
         )
 
-        assert "▶️ Copilot agent resumed" in result
+        assert "Resume tracking state recorded" in result
+        assert "No Copilot agent was resumed" in result
         assert "#42" in result
         mock_remove_label.assert_called_once_with(
             "testorg", "testrepo", 42, LABEL_AGENT_PAUSED
@@ -236,8 +240,8 @@ class TestResumeCopilotAgent:
             issue_number=42,
         )
 
-        assert "❌ Cannot resume stopped agent" in result
-        assert "create a new assignment" in result
+        assert "Cannot update stopped tracking state" in result
+        assert "No Copilot agent was resumed." in result
 
     @patch("souschef.github.agent_control._check_agent_labels", return_value="active")
     def test_resume_active_agent_warning(self, mock_check):
@@ -248,7 +252,7 @@ class TestResumeCopilotAgent:
             issue_number=42,
         )
 
-        assert "⚠️ Agent is not paused" in result
+        assert "Tracking status is not paused" in result
         assert "active" in result
 
     @patch("souschef.github.agent_control._add_comment_to_issue")
@@ -282,7 +286,7 @@ class TestResumeCopilotAgent:
             issue_number=42,
         )
 
-        assert "Error resuming" in result
+        assert "Error updating Copilot-agent tracking state" in result
         assert "Resume error" in result
 
 
@@ -295,7 +299,7 @@ class TestCheckCopilotAgentStatus:
     )
     @patch("souschef.github.agent_control._check_agent_labels", return_value="active")
     def test_check_status_active(self, mock_check, mock_comments):
-        """Test checking status of active agent."""
+        """Test status reports tracking state, not live agent status."""
         result = check_copilot_agent_status(
             owner="testorg",
             repo="testrepo",
@@ -303,7 +307,8 @@ class TestCheckCopilotAgentStatus:
         )
 
         assert "✅" in result
-        assert "Active" in result
+        assert "Tracking status:** Active" in result
+        assert "do not reflect or control a live Copilot agent" in result
         assert "#42" in result
         assert "testorg/testrepo" in result
         assert "Recent activity here" in result
@@ -371,7 +376,7 @@ class TestCheckCopilotAgentStatus:
             issue_number=42,
         )
 
-        assert "Error checking" in result
+        assert "Error reading Copilot-agent tracking state" in result
 
 
 class TestAgentControlLabels:
@@ -394,3 +399,16 @@ class TestAgentControlLabels:
         assert "Paused" in COMMENT_PAUSE_REQUEST
         assert "Stopped" in COMMENT_STOP_REQUEST
         assert "Resumed" in COMMENT_RESUME_REQUEST
+
+
+def test_agent_control_rejects_issue_path_injection() -> None:
+    """Untrusted repository identifiers cannot change the GitHub API endpoint."""
+    with patch("souschef.github.agent_control.requests.request") as request:
+        result = assign_copilot_agent_to_issue(
+            owner="../users",
+            repo="other",
+            issue_number=1,
+        )
+
+    assert "Invalid GitHub issue API path" in result
+    request.assert_not_called()

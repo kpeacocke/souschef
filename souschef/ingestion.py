@@ -7,7 +7,7 @@ import shutil
 import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 from souschef.core.chef_server import ChefServerClient, build_chef_server_client
@@ -15,6 +15,7 @@ from souschef.core.path_utils import (
     _ensure_within_base_path,
     _get_workspace_root,
     _normalize_path,
+    _safe_join,
 )
 from souschef.filesystem.operations import create_tar_gz_archive, extract_tar_gz_archive
 
@@ -103,7 +104,7 @@ def fetch_cookbooks_from_chef_server(
         dependency_depth=dependency_depth,
     )
 
-    cookbook_root = output_root / "cookbooks"
+    cookbook_root = _safe_join(output_root, "cookbooks")
     cookbook_root.mkdir(parents=True, exist_ok=True)
 
     for spec in closure:
@@ -235,9 +236,13 @@ def _select_dependency_version(
     warnings: list[str],
 ) -> str | None:
     """Select cookbook version for dependency constraint."""
-    available = client.list_cookbook_versions(cookbook_name)
+    safe_cookbook_name = _validate_cookbook_component(cookbook_name, "name")
+    available = [
+        _validate_cookbook_component(version, "version")
+        for version in client.list_cookbook_versions(safe_cookbook_name)
+    ]
     if not available:
-        warnings.append(f"Dependency {cookbook_name} has no available versions")
+        warnings.append(f"Dependency {safe_cookbook_name} has no available versions")
         return None
 
     constraint_value = (constraint or "").strip()
@@ -250,7 +255,8 @@ def _select_dependency_version(
         if matches:
             return _latest_version(matches)
         warnings.append(
-            f"Dependency {cookbook_name} uses unsupported constraint {constraint_value}"
+            f"Dependency {safe_cookbook_name} uses unsupported "
+            f"constraint {constraint_value}"
         )
         return _latest_version(available)
 
@@ -259,7 +265,7 @@ def _select_dependency_version(
         if target in available:
             return target
         warnings.append(
-            f"Dependency {cookbook_name} requested {target} but it is unavailable"
+            f"Dependency {safe_cookbook_name} requested {target} but it is unavailable"
         )
         return _latest_version(available)
 
@@ -267,7 +273,8 @@ def _select_dependency_version(
         return constraint_value
 
     warnings.append(
-        f"Dependency {cookbook_name} uses constraint {constraint_value}; using latest"
+        f"Dependency {safe_cookbook_name} uses constraint {constraint_value}; "
+        "using latest"
     )
     return _latest_version(available)
 
@@ -301,8 +308,8 @@ def _download_cookbook(
 ) -> None:
     """Download a cookbook version into destination directory."""
     resolved_spec = _normalise_spec(client=client, spec=spec, warnings=warnings)
-    cache_dir = cache_root / resolved_spec.name / resolved_spec.version
-    cookbook_dir = destination / spec.name
+    cache_dir = _safe_join(cache_root, resolved_spec.name, resolved_spec.version)
+    cookbook_dir = _safe_join(destination, resolved_spec.name)
 
     if use_cache and cache_dir.exists():
         if cookbook_dir.exists():
@@ -320,8 +327,9 @@ def _download_cookbook(
         url = item.get("url")
         if not path or not url:
             continue
-        target_path = cookbook_dir / path
+        target_path = _resolve_cookbook_item_path(cookbook_dir, path)
         target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path = _resolve_cookbook_item_path(cookbook_dir, path)
         try:
             content = client.download_url(url)
         except Exception as exc:
@@ -330,6 +338,7 @@ def _download_cookbook(
                 f"{resolved_spec.name} {resolved_spec.version} {path}: {exc}"
             )
             continue
+        target_path = _resolve_cookbook_item_path(cookbook_dir, path)
         target_path.write_bytes(content)
 
     _write_cookbook_metadata(cookbook_dir, metadata)
@@ -341,6 +350,48 @@ def _download_cookbook(
         shutil.copytree(cookbook_dir, cache_dir)
 
 
+def _resolve_cookbook_item_path(cookbook_dir: Path, relative_path: str) -> Path:
+    """Validate a Chef Server file path before using it under a cookbook root."""
+    windows_path = PureWindowsPath(relative_path)
+    item_path = PurePosixPath(relative_path)
+    if (
+        not relative_path
+        or "\x00" in relative_path
+        or "\\" in relative_path
+        or ":" in relative_path
+        or item_path.is_absolute()
+        or windows_path.is_absolute()
+        or windows_path.drive
+        or windows_path.root
+        or not item_path.parts
+        or ".." in item_path.parts
+    ):
+        raise ValueError(f"Unsafe Chef cookbook file path: {relative_path!r}")
+
+    try:
+        return _safe_join(cookbook_dir, *item_path.parts)
+    except ValueError as exc:
+        raise ValueError(f"Unsafe Chef cookbook file path: {relative_path!r}") from exc
+
+
+def _validate_cookbook_component(value: str, label: str) -> str:
+    """Validate cookbook names and versions as single portable path components."""
+    windows_path = PureWindowsPath(value)
+    if (
+        not value
+        or value in {".", ".."}
+        or "\x00" in value
+        or "/" in value
+        or "\\" in value
+        or ":" in value
+        or windows_path.is_absolute()
+        or windows_path.drive
+        or windows_path.root
+    ):
+        raise ValueError(f"Unsafe Chef cookbook {label}: {value!r}")
+    return value
+
+
 def _normalise_spec(
     *,
     client: ChefServerClient,
@@ -348,13 +399,20 @@ def _normalise_spec(
     warnings: list[str],
 ) -> CookbookSpec:
     """Ensure a cookbook spec has a concrete version."""
+    safe_name = _validate_cookbook_component(spec.name, "name")
     if spec.version:
-        return spec
-    available = client.list_cookbook_versions(spec.name)
+        return CookbookSpec(
+            name=safe_name,
+            version=_validate_cookbook_component(spec.version, "version"),
+        )
+    available = [
+        _validate_cookbook_component(version, "version")
+        for version in client.list_cookbook_versions(safe_name)
+    ]
     if not available:
-        warnings.append(f"Cookbook {spec.name} has no available versions")
-        return spec
-    return CookbookSpec(name=spec.name, version=_latest_version(available))
+        warnings.append(f"Cookbook {safe_name} has no available versions")
+        return CookbookSpec(name=safe_name, version="")
+    return CookbookSpec(name=safe_name, version=_latest_version(available))
 
 
 def _collect_cookbook_items(metadata: dict[str, Any]) -> list[dict[str, str]]:
@@ -401,7 +459,7 @@ def _collect_section_items(
 
 def _write_cookbook_metadata(cookbook_dir: Path, metadata: dict[str, Any]) -> None:
     """Write cookbook metadata to a JSON file."""
-    metadata_path = cookbook_dir / "metadata.json"
+    metadata_path = _safe_join(cookbook_dir, "metadata.json")
     metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
 
 
@@ -423,6 +481,6 @@ def _write_manifest(
         "dependency_graph": dependency_graph,
         "warnings": warnings,
     }
-    manifest_path = root_dir / "manifest.json"
+    manifest_path = _safe_join(root_dir, "manifest.json")
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     return manifest_path

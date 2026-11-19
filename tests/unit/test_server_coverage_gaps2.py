@@ -980,39 +980,34 @@ def test_start_v2_migration_exception() -> None:
 
 
 # ---------------------------------------------------------------------------
-# validate_v2_playbooks – exception path (lines 5296-5297)
+# validate_v2_playbooks – explicit unsupported result
 # ---------------------------------------------------------------------------
 
 
-def test_validate_v2_playbooks_exception() -> None:
-    """validate_v2_playbooks returns a JSON error when an exception is raised."""
-    with patch(
-        "souschef.server._validate_version_combination",
-        side_effect=RuntimeError("val boom"),
-    ):
-        result = validate_v2_playbooks("/path/to/playbook.yml", "2.16")
-
-    # Normal path works (exception inside would have to be triggered differently)
-    assert isinstance(result, str)
+def test_validate_v2_playbooks_reports_unimplemented() -> None:
+    """validate_v2_playbooks does not claim uninspected files passed."""
+    result = validate_v2_playbooks("/path/to/playbook.yml", "2.16")
     data = json.loads(result)
-    assert "playbooks" in data or "error" in data
+    assert data["status"] == "not_implemented"
+    assert data["validation_performed"] is False
+    assert data["playbooks_validated"] == 0
 
 
-def test_validate_v2_playbooks_returns_valid() -> None:
-    """validate_v2_playbooks returns validation results for given paths."""
+def test_validate_v2_playbooks_returns_unimplemented_status() -> None:
+    """validate_v2_playbooks does not claim to validate given paths."""
     result = validate_v2_playbooks("/path/a.yml,/path/b.yml", "2.16")
     data = json.loads(result)
-    assert "playbooks" in data
-    assert len(data["playbooks"]) == 2
+    assert data["status"] == "not_implemented"
+    assert data["playbooks_validated"] == 0
 
 
 # ---------------------------------------------------------------------------
-# rollback_v2_migration – exception path (lines 5347-5348)
+# rollback_v2_migration – explicit unsupported result
 # ---------------------------------------------------------------------------
 
 
-def test_rollback_v2_migration_success() -> None:
-    """rollback_v2_migration returns rollback_complete status with deleted resources."""
+def test_rollback_v2_migration_does_not_claim_deletion() -> None:
+    """rollback_v2_migration reports requested resources without deleting them."""
     result = rollback_v2_migration(
         ansible_url="https://awx",
         ansible_username="admin",
@@ -1022,8 +1017,9 @@ def test_rollback_v2_migration_success() -> None:
         job_template_id=7,
     )
     data = json.loads(result)
-    assert data["status"] == "rollback_complete"
-    assert len(data["deleted_resources"]) == 3
+    assert data["status"] == "not_implemented"
+    assert data["rollback_performed"] is False
+    assert len(data["requested_resources"]) == 3
 
 
 # ---------------------------------------------------------------------------

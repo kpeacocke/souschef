@@ -1,45 +1,47 @@
 # Security
 
-SousChef takes security seriously. This document outlines our security practices, how to report vulnerabilities, and the security features built into the project.
+This document describes verified security controls and container dependency
+practices. For supported versions and private vulnerability reporting, see the
+[root security policy](../SECURITY.md).
 
 ## Security Features
 
 ### Path Containment Validation
 
-SousChef implements comprehensive path containment validation to prevent directory traversal attacks (CWE-22). All filesystem operations use validated paths that stay within trusted directories.
+SousChef provides path-containment helpers used by filesystem operations and
+MCP tools that accept workspace paths.
 
 **Key Security Functions:**
 
-- `_ensure_within_base_path()`: Validates that paths stay within a trusted base directory
-- `_normalize_path()`: Normalizes paths and rejects null bytes (CWE-158 prevention)
-- `_safe_join()`: Safely joins path components with traversal protection
-- `safe_*()` wrappers: All filesystem operations (read, write, glob, etc.) enforce containment
+- `_ensure_within_base_path()`: Checks lexical and resolved paths against a trusted base
+- `_normalize_path()`: Normalises paths and rejects null bytes (CWE-158)
+- `_safe_join()`: Joins path components and checks the result remains within the base
+- `safe_*()` wrappers: Provide containment checks for common filesystem operations
 
-**Protected Against:**
+**Designed to prevent:**
 
 - Directory traversal attacks (`../../../etc/passwd`)
 - Absolute path escapes (`/etc/passwd`)
-- Symlink-based attacks (symlinks pointing outside base directory)
+- Symlink escapes that resolve outside the base directory at validation time
 - Null byte injection (`file.rb\x00.txt`)
-- URL encoding bypasses
-- Double slash sequences
 
-**Test Coverage:**
+These checks do not prevent races if another process changes filesystem entries
+after validation. They also do not replace operating-system permissions or
+careful workspace mounting.
 
-Comprehensive security tests in the repository (`tests/unit/test_security.py`):
-- 42+ security-focused tests
-- Path traversal attack scenarios
-- Symlink attack prevention
-- Null byte injection prevention
-- Integration tests for complete workflows
+**Relevant tests:**
+
+Path traversal, symlink, and null-byte scenarios are covered in
+`tests/unit/test_security.py` and related tool-specific tests.
 
 ### Input Validation
 
-All user inputs are validated before use:
+Security-sensitive inputs are validated at relevant tool boundaries:
 
-- **File paths**: Normalized and validated for containment
-- **Configuration values**: Type-checked and range-validated
-- **API inputs**: Schema validation using Pydantic models
+- **File paths**: Normalised and validated for containment by path-based MCP
+  tools and filesystem helpers
+- **Configuration values**: Validated where tools define type and range rules
+- **API inputs**: Request schemas are validated where Pydantic models are used
 
 ### Dependency Security
 
@@ -70,7 +72,7 @@ CI policy for dependency auditing:
 
 - Policy: `fail-on-any` (CI fails when any vulnerability is reported)
 - Supported policies: `fail-on-any`, `report-only`
-- Command: `poetry run pip-audit --strict --locked .`
+- Command: `poetry run pip-audit --strict`
 - Exceptions: use explicit vulnerability allowlists with `--ignore-vuln` only when triaged and approved
 
 **Checking Dependencies:**
@@ -88,7 +90,7 @@ poetry update
 
 ### Container Dependency Policy
 
-- Production Python 3.13 base images are pinned by multi-platform digest.
+- Production base images are pinned by multi-platform digest.
   Dependabot checks Docker tags and digests weekly; review Python and operating
   system upgrades before merging them.
 - MCP images use Alpine. System packages deliberately track the supported
@@ -114,11 +116,12 @@ poetry update
   CRITICAL container vulnerabilities. Uncached builds expose repository drift
   before publishing. Update the Alpine branch before its support ends.
 
-### AI Integration Security
+### AI Integration Considerations
 
 When using AI providers (Anthropic, OpenAI, etc.):
 
-- **API Keys**: Never hardcoded; use environment variables or dotenv files
+- **API Keys**: Supply keys through configured credential settings or explicit
+  tool parameters; do not commit them to source control
 - **Structured Outputs**: Pydantic schemas for type-safe AI responses
 - **Error Handling**: Graceful degradation when AI services are unavailable
 - **Rate Limiting**: Respect provider rate limits
@@ -134,33 +137,11 @@ OPENAI_API_KEY=your-key-here
 echo ".env" >> .gitignore
 ```
 
-### Secure Defaults
-
-- **File permissions**: Creates files with restrictive permissions
-- **YAML parsing**: Safe loading (no arbitrary code execution)
-- **Template rendering**: Sandboxed execution context
-- **HTTP requests**: Timeouts to prevent hanging connections
-
 ## Reporting Security Vulnerabilities
 
-We take security vulnerabilities seriously. If you discover a security issue, please report it responsibly:
-
-**DO:**
-- Email security reports to the maintainers (see SECURITY.md in root)
-- Provide detailed reproduction steps
-- Allow reasonable time for fixes before public disclosure
-- Work with us to verify the fix
-
-**DON'T:**
-- Open public GitHub issues for security vulnerabilities
-- Exploit vulnerabilities in production systems
-- Share vulnerabilities publicly before fixes are released
-
-**Response Timeline:**
-- Initial response: Within 48 hours
-- Triage and assessment: Within 1 week
-- Fix development: Varies by severity
-- Public disclosure: After fix is released
+Use the private reporting channels and disclosure guidance in the
+[root security policy](../SECURITY.md). No response or remediation timeline is
+promised.
 
 ## Security Best Practices for Users
 

@@ -26,7 +26,11 @@ from souschef.core.metrics import (
     EffortMetrics,
     categorize_complexity,
 )
-from souschef.core.path_utils import _safe_join
+from souschef.core.path_utils import (
+    _get_workspace_root,
+    _resolve_path_under_base,
+    _safe_join,
+)
 from souschef.core.url_validation import validate_user_provided_url
 
 # Maximum length for attribute values in Chef attribute parsing
@@ -56,7 +60,10 @@ def generate_awx_job_template_from_cookbook(
                 "Suggestion: Provide a valid cookbook name"
             )
 
-        cookbook = validate_cookbook_structure(cookbook_path)
+        safe_cookbook_path = _resolve_path_under_base(
+            cookbook_path, _get_workspace_root()
+        )
+        cookbook = validate_cookbook_structure(str(safe_cookbook_path))
         cookbook_analysis = _analyse_cookbook_for_awx(cookbook, cookbook_name)
         job_template = _generate_awx_job_template(
             cookbook_analysis, cookbook_name, target_environment, include_survey
@@ -185,8 +192,11 @@ def generate_awx_project_from_cookbooks(
                 "Suggestion: Provide a descriptive name for the AWX project"
             )
 
+        safe_cookbooks_directory = _resolve_path_under_base(
+            cookbooks_directory, _get_workspace_root()
+        )
         cookbooks_path = validate_directory_exists(
-            cookbooks_directory, "cookbooks directory"
+            str(safe_cookbooks_directory), "cookbooks directory"
         )
 
         # Analyze all cookbooks
@@ -330,7 +340,10 @@ def convert_chef_deployment_to_ansible_strategy(
     Override auto-detection by specifying explicit pattern.
     """
     try:
-        cookbook = validate_cookbook_structure(cookbook_path)
+        safe_cookbook_path = _resolve_path_under_base(
+            cookbook_path, _get_workspace_root()
+        )
+        cookbook = validate_cookbook_structure(str(safe_cookbook_path))
 
         # Validate deployment pattern
         valid_patterns = ["auto", "blue_green", "canary", "rolling_update"]
@@ -651,7 +664,10 @@ def analyse_chef_application_patterns(
     Application type helps tune recommendations for web/database/service workloads.
     """
     try:
-        cookbook = validate_cookbook_structure(cookbook_path)
+        safe_cookbook_path = _resolve_path_under_base(
+            cookbook_path, _get_workspace_root()
+        )
+        cookbook = validate_cookbook_structure(str(safe_cookbook_path))
 
         # Validate application type
         valid_app_types = ["web_application", "database", "service", "batch", "api"]

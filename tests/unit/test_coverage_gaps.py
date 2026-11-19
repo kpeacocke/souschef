@@ -482,6 +482,57 @@ class TestFilesystemOperations:
         ):
             extract_tar_gz_archive(fake_archive, output_dir)
 
+    def test_extract_tar_gz_archive_extracts_regular_file(self, tmp_path: Path) -> None:
+        """Regular archive members extract within the configured workspace."""
+        import io
+        import tarfile
+
+        from souschef.filesystem.operations import extract_tar_gz_archive
+
+        archive_path = tmp_path / "bundle.tar.gz"
+        with tarfile.open(archive_path, "w:gz") as archive:
+            content = b"safe content"
+            member = tarfile.TarInfo("cookbook/recipe.rb")
+            member.size = len(content)
+            archive.addfile(member, io.BytesIO(content))
+
+        with patch(
+            "souschef.filesystem.operations._get_workspace_root",
+            return_value=tmp_path,
+        ):
+            output_dir = Path(
+                extract_tar_gz_archive(str(archive_path), str(tmp_path / "out"))
+            )
+
+        assert (output_dir / "cookbook/recipe.rb").read_bytes() == b"safe content"
+
+    def test_extract_tar_gz_archive_rejects_parent_traversal(
+        self, tmp_path: Path
+    ) -> None:
+        """Archive members cannot write outside the extraction directory."""
+        import io
+        import tarfile
+
+        from souschef.filesystem.operations import extract_tar_gz_archive
+
+        archive_path = tmp_path / "bundle.tar.gz"
+        with tarfile.open(archive_path, "w:gz") as archive:
+            content = b"outside"
+            member = tarfile.TarInfo("../outside.txt")
+            member.size = len(content)
+            archive.addfile(member, io.BytesIO(content))
+
+        with (
+            patch(
+                "souschef.filesystem.operations._get_workspace_root",
+                return_value=tmp_path,
+            ),
+            pytest.raises(ValueError, match="Unsafe archive member path"),
+        ):
+            extract_tar_gz_archive(str(archive_path), str(tmp_path / "out"))
+
+        assert not (tmp_path / "outside.txt").exists()
+
 
 # ---------------------------------------------------------------------------
 # souschef/core/path_utils.py – uncovered lines 28, 30, 144

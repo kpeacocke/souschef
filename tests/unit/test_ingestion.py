@@ -2,7 +2,7 @@
 
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -418,3 +418,186 @@ def test_fetch_cookbooks_no_output_dir(
 
     assert result.root_dir.exists()
     assert "souschef-cookbooks-" in str(result.root_dir)
+
+
+@pytest.mark.parametrize(
+    "item_path",
+    [
+        "../escape.rb",
+        "/tmp/escape.rb",
+        r"..\escape.rb",
+        r"C:\escape.rb",
+    ],
+)
+def test_download_cookbook_rejects_unsafe_server_item_paths(
+    tmp_path: Path, item_path: str
+) -> None:
+    """Reject absolute and traversing paths returned by Chef Server metadata."""
+    from souschef.ingestion import _download_cookbook
+
+    client = Mock()
+    client.get_cookbook_version.return_value = {
+        "recipes": [{"path": item_path, "url": "https://chef.example.com/file"}]
+    }
+    cookbook_dir = tmp_path / "downloads" / "sample"
+
+    with pytest.raises(ValueError, match="Unsafe Chef cookbook file path"):
+        _download_cookbook(
+            client=client,
+            spec=CookbookSpec(name="sample", version="1.0.0"),
+            destination=cookbook_dir.parent,
+            use_cache=False,
+            cache_root=tmp_path / "cache",
+            warnings=[],
+        )
+
+    client.download_url.assert_not_called()
+    assert not (tmp_path / "escape.rb").exists()
+
+
+def test_download_cookbook_rejects_symlink_escape(
+    tmp_path: Path,
+) -> None:
+    """Reject server paths whose existing parent symlink escapes the cookbook."""
+    from souschef.ingestion import _download_cookbook
+
+    client = Mock()
+    client.get_cookbook_version.return_value = {
+        "recipes": [
+            {
+                "path": "recipes/escape.rb",
+                "url": "https://chef.example.com/file",
+            }
+        ]
+    }
+    destination = tmp_path / "downloads"
+    cookbook_dir = destination / "sample"
+    outside_dir = tmp_path / "outside"
+    (cookbook_dir).mkdir(parents=True)
+    outside_dir.mkdir()
+    try:
+        (cookbook_dir / "recipes").symlink_to(outside_dir, target_is_directory=True)
+    except OSError as exc:
+        pytest.skip(f"Symlink creation is unavailable: {exc}")
+
+    with pytest.raises(ValueError, match="Unsafe Chef cookbook file path"):
+        _download_cookbook(
+            client=client,
+            spec=CookbookSpec(name="sample", version="1.0.0"),
+            destination=destination,
+            use_cache=False,
+            cache_root=tmp_path / "cache",
+            warnings=[],
+        )
+
+    client.download_url.assert_not_called()
+    assert not (outside_dir / "escape.rb").exists()
+
+
+def test_download_cookbook_rejects_symlinked_destination(
+    tmp_path: Path,
+) -> None:
+    """Reject an existing cookbook directory linked outside its destination."""
+    from souschef.ingestion import _download_cookbook
+
+    client = Mock()
+    destination = tmp_path / "downloads"
+    destination.mkdir()
+    outside_dir = tmp_path / "outside"
+    outside_dir.mkdir()
+    try:
+        (destination / "sample").symlink_to(outside_dir, target_is_directory=True)
+    except OSError as exc:
+        pytest.skip(f"Symlink creation is unavailable: {exc}")
+
+    with pytest.raises(ValueError, match="Path traversal attempt"):
+        _download_cookbook(
+            client=client,
+            spec=CookbookSpec(name="sample", version="1.0.0"),
+            destination=destination,
+            use_cache=False,
+            cache_root=tmp_path / "cache",
+            warnings=[],
+        )
+
+    client.get_cookbook_version.assert_not_called()
+    assert not (outside_dir / "metadata.json").exists()
+
+
+def test_download_cookbook_rejects_symlinked_cache_path(
+    tmp_path: Path,
+) -> None:
+    """Reject an existing cached cookbook directory linked outside its root."""
+    from souschef.ingestion import _download_cookbook
+
+    client = Mock()
+    destination = tmp_path / "downloads"
+    destination.mkdir()
+    cache_root = tmp_path / "cache"
+    (cache_root / "sample").mkdir(parents=True)
+    outside_dir = tmp_path / "outside"
+    outside_dir.mkdir()
+    try:
+        (cache_root / "sample" / "1.0.0").symlink_to(
+            outside_dir, target_is_directory=True
+        )
+    except OSError as exc:
+        pytest.skip(f"Symlink creation is unavailable: {exc}")
+
+    with pytest.raises(ValueError, match="Path traversal attempt"):
+        _download_cookbook(
+            client=client,
+            spec=CookbookSpec(name="sample", version="1.0.0"),
+            destination=destination,
+            use_cache=True,
+            cache_root=cache_root,
+            warnings=[],
+        )
+
+    client.get_cookbook_version.assert_not_called()
+    assert not list(outside_dir.iterdir())
+
+
+@pytest.mark.parametrize(
+    "spec",
+    [
+        CookbookSpec(name="../escape", version="1.0.0"),
+        CookbookSpec(name="sample", version="../escape"),
+        CookbookSpec(name=r"..\escape", version="1.0.0"),
+        CookbookSpec(name="sample", version=r"C:\escape"),
+    ],
+)
+def test_download_cookbook_rejects_unsafe_spec_paths(
+    tmp_path: Path, spec: CookbookSpec
+) -> None:
+    """Reject cookbook names and versions that could escape storage roots."""
+    from souschef.ingestion import _download_cookbook
+
+    client = Mock()
+    with pytest.raises(ValueError, match="Unsafe Chef cookbook"):
+        _download_cookbook(
+            client=client,
+            spec=spec,
+            destination=tmp_path / "downloads",
+            use_cache=False,
+            cache_root=tmp_path / "cache",
+            warnings=[],
+        )
+
+    client.get_cookbook_version.assert_not_called()
+
+
+def test_dependency_resolution_rejects_unsafe_server_cookbook_name() -> None:
+    """Reject dependency names from Chef metadata before querying the server."""
+    from souschef.ingestion import _select_dependency_version
+
+    client = Mock()
+    with pytest.raises(ValueError, match="Unsafe Chef cookbook name"):
+        _select_dependency_version(
+            client=client,
+            cookbook_name="../escape",
+            constraint=">= 0.0.0",
+            warnings=[],
+        )
+
+    client.list_cookbook_versions.assert_not_called()

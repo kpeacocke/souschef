@@ -9,6 +9,8 @@ import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from souschef.migration_v2 import (
     MigrationOrchestrator,
     MigrationResult,
@@ -266,6 +268,28 @@ class TestTemplateConversion:
 
             result = orchestrator.migrate_cookbook(str(cookbook_dir))
             assert result.metrics.templates_skipped >= 0
+
+    def test_convert_templates_rejects_symlink_escape(self, tmp_path: Path) -> None:
+        """Do not convert template files linked outside the cookbook."""
+        cookbook_dir = tmp_path / "cookbook"
+        templates_dir = cookbook_dir / "templates"
+        templates_dir.mkdir(parents=True)
+        outside_template = tmp_path / "outside.erb"
+        outside_template.write_text("private template content", encoding="utf-8")
+        try:
+            (templates_dir / "outside.erb").symlink_to(outside_template)
+        except OSError as exc:
+            pytest.skip(f"Symlink creation is unavailable: {exc}")
+
+        orchestrator = MigrationOrchestrator(
+            chef_version="14.15.6", target_platform="awx", target_version="24.6.1"
+        )
+
+        with patch("souschef.migration_v2.convert_template_file") as mock_convert:
+            result = orchestrator.migrate_cookbook(str(cookbook_dir))
+
+        mock_convert.assert_not_called()
+        assert result.metrics.templates_skipped == 1
 
 
 class TestPlaybookValidation:

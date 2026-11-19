@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from souschef.server import (
     convert_salt_to_ansible,
     parse_salt_directory,
@@ -12,6 +14,13 @@ from souschef.server import (
     parse_salt_top,
     query_salt_master,
 )
+
+
+@pytest.fixture(autouse=True)
+def allow_test_salt_master(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Allow the reserved test hostname used by mocked Salt requests."""
+    monkeypatch.setenv("SOUSCHEF_ALLOWED_HOSTNAMES", "salt-master")
+
 
 # ---------------------------------------------------------------------------
 # parse_salt_sls MCP tool
@@ -50,6 +59,21 @@ def test_server_parse_salt_sls_calls_parser() -> None:
         result = parse_salt_sls("/some/path.sls")
     mock.assert_called_once_with("/some/path.sls")
     assert result == expected
+
+
+def test_server_parse_salt_sls_rejects_path_outside_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Salt file tools cannot read outside the configured workspace."""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(workspace))
+
+    with patch("souschef.server._parse_salt_sls") as mock_parse:
+        result = parse_salt_sls(str(tmp_path / "outside.sls"))
+
+    assert "escapes" in result
+    mock_parse.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -168,6 +192,31 @@ def test_server_query_salt_master_url_too_long() -> None:
     result_dict = json.loads(result)
     assert result_dict["status"] == "error"
     assert "exceeds" in result_dict["error"]
+
+
+def test_server_query_salt_master_rejects_http_before_sending_credentials() -> None:
+    """Salt credentials must never be sent over an unencrypted connection."""
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        result = query_salt_master("http://salt-master:8080", "user", "secret")
+
+    result_dict = json.loads(result)
+    assert result_dict["status"] == "error"
+    assert "https://" in result_dict["error"]
+    mock_urlopen.assert_not_called()
+
+
+def test_server_query_salt_master_rejects_private_host_without_allowlisting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Salt requests cannot target private IPs unless explicitly allowlisted."""
+    monkeypatch.delenv("SOUSCHEF_ALLOWED_HOSTNAMES")
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        result = query_salt_master("https://127.0.0.1:8080", "user", "secret")
+
+    result_dict = json.loads(result)
+    assert result_dict["status"] == "error"
+    assert "public hostname" in result_dict["error"]
+    mock_urlopen.assert_not_called()
 
 
 def test_server_query_salt_master_invalid_query_type() -> None:

@@ -943,12 +943,12 @@ def test_start_v2_migration_exception(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 # ---------------------------------------------------------------------------
-# deploy_v2_migration – success path (lines 4211, 4247)
+# deploy_v2_migration – explicit unsupported result
 # ---------------------------------------------------------------------------
 
 
-def test_deploy_v2_migration_returns_status() -> None:
-    """Test deploy_v2_migration returns a deployment_ready status."""
+def test_deploy_v2_migration_reports_unimplemented() -> None:
+    """Test deploy_v2_migration does not claim to deploy."""
     result = deploy_v2_migration(
         migration_id="test-migration-1",
         ansible_url="https://awx.example.com",
@@ -956,34 +956,34 @@ def test_deploy_v2_migration_returns_status() -> None:
         ansible_password="secret",  # NOSONAR - test fixture
     )
     payload = json.loads(result)
-    assert payload["status"] == "deployment_ready"
+    assert payload["status"] == "not_implemented"
     assert payload["migration_id"] == "test-migration-1"
 
 
 # ---------------------------------------------------------------------------
-# validate_v2_playbooks – success path (lines 4252-4253, 4263-4267)
+# validate_v2_playbooks – explicit unsupported result
 # ---------------------------------------------------------------------------
 
 
-def test_validate_v2_playbooks_success() -> None:
-    """Test validate_v2_playbooks returns validation results."""
+def test_validate_v2_playbooks_reports_unimplemented() -> None:
+    """Test validate_v2_playbooks does not claim to validate files."""
     result = validate_v2_playbooks(
         playbook_paths="playbook1.yml,playbook2.yml",
         target_ansible_version="2.16",
     )
     payload = json.loads(result)
-    assert payload["playbooks_validated"] == 2
-    assert payload["all_valid"] is True
-    assert len(payload["playbooks"]) == 2
+    assert payload["status"] == "not_implemented"
+    assert payload["validation_performed"] is False
+    assert payload["playbooks_validated"] == 0
 
 
 # ---------------------------------------------------------------------------
-# rollback_v2_migration – success path (lines 4312-4313)
+# rollback_v2_migration – explicit unsupported result
 # ---------------------------------------------------------------------------
 
 
-def test_rollback_v2_migration_with_resources() -> None:
-    """Test rollback_v2_migration with resources to delete."""
+def test_rollback_v2_migration_reports_no_deletion() -> None:
+    """Test rollback_v2_migration does not claim to delete resources."""
     result = rollback_v2_migration(
         ansible_url="https://awx.example.com",
         ansible_username="admin",
@@ -993,20 +993,22 @@ def test_rollback_v2_migration_with_resources() -> None:
         job_template_id=3,
     )
     payload = json.loads(result)
-    assert payload["status"] == "rollback_complete"
-    assert len(payload["deleted_resources"]) == 3
+    assert payload["status"] == "not_implemented"
+    assert payload["rollback_performed"] is False
+    assert len(payload["requested_resources"]) == 3
 
 
 def test_rollback_v2_migration_no_resources() -> None:
-    """Test rollback_v2_migration with no resources to delete."""
+    """Test rollback_v2_migration reports that nothing was done."""
     result = rollback_v2_migration(
         ansible_url="https://awx.example.com",
         ansible_username="admin",
         ansible_password="secret",  # NOSONAR - test fixture
     )
     payload = json.loads(result)
-    assert payload["status"] == "rollback_complete"
-    assert payload["deleted_resources"] == []
+    assert payload["status"] == "not_implemented"
+    assert payload["rollback_performed"] is False
+    assert payload["requested_resources"] == []
 
 
 # ---------------------------------------------------------------------------
@@ -1252,15 +1254,17 @@ def test_start_v2_migration_basic_success(
 
 
 # ---------------------------------------------------------------------------
-# validate_v2_playbooks – exception branch (lines 4994-4996)
+# validate_v2_playbooks – explicit unsupported result
 # ---------------------------------------------------------------------------
 
 
 def test_validate_v2_playbooks_exception() -> None:
-    """Test validate_v2_playbooks returns valid JSON with a single playbook."""
+    """Test validate_v2_playbooks does not claim to validate a file."""
     result = validate_v2_playbooks("playbook.yml", "2.15")
     payload = json.loads(result)
-    assert payload["playbooks_validated"] == 1
+    assert payload["status"] == "not_implemented"
+    assert payload["validation_performed"] is False
+    assert payload["playbooks_validated"] == 0
     assert payload["target_ansible_version"] == "2.15"
 
 
@@ -1362,14 +1366,12 @@ def test_list_migration_version_combinations_structure() -> None:
 
 
 # ---------------------------------------------------------------------------
-# deploy_v2_migration – exception branch (lines 5277-5297)
+# deploy_v2_migration – unsupported status payload
 # ---------------------------------------------------------------------------
 
 
-def test_deploy_v2_migration_exception() -> None:
-    """Test deploy_v2_migration exception handling path."""
-    # The current implementation doesn't raise but we test the outer try/except
-    # by verifying it handles string inputs correctly
+def test_deploy_v2_migration_returns_not_implemented() -> None:
+    """Test deploy_v2_migration returns an explicit unsupported status."""
     result = deploy_v2_migration(
         migration_id="test-id",
         ansible_url="https://awx.example.com",
@@ -1377,7 +1379,7 @@ def test_deploy_v2_migration_exception() -> None:
         ansible_password="pass",  # NOSONAR - test fixture
     )
     payload = json.loads(result)
-    assert "status" in payload
+    assert payload["status"] == "not_implemented"
 
 
 # ---------------------------------------------------------------------------
@@ -1386,7 +1388,7 @@ def test_deploy_v2_migration_exception() -> None:
 
 
 def test_rollback_v2_migration_partial_resources() -> None:
-    """Test rollback_v2_migration with only some resources specified."""
+    """Test rollback_v2_migration reports requested resources only."""
     result = rollback_v2_migration(
         ansible_url="https://awx.example.com",
         ansible_username="admin",
@@ -1394,9 +1396,9 @@ def test_rollback_v2_migration_partial_resources() -> None:
         project_id=5,
     )
     payload = json.loads(result)
-    assert payload["status"] == "rollback_complete"
-    assert len(payload["deleted_resources"]) == 1
-    assert "project:5" in payload["deleted_resources"]
+    assert payload["status"] == "not_implemented"
+    assert payload["rollback_performed"] is False
+    assert payload["requested_resources"] == ["project:5"]
 
 
 # ---------------------------------------------------------------------------

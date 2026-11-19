@@ -303,8 +303,8 @@ end
     assert result == snapshot
 
 
-def test_convert_chef_deployment_strategy_snapshot(snapshot):
-    """Snapshot test for Chef deployment to Ansible strategy conversion."""
+def test_convert_chef_deployment_strategy_rejects_non_path_input():
+    """Reject deployment configuration text where a cookbook path is required."""
     deployment_config = """
 {
   "strategy": "rolling",
@@ -320,7 +320,7 @@ def test_convert_chef_deployment_strategy_snapshot(snapshot):
     result = convert_chef_deployment_to_ansible_strategy(
         deployment_config, "web_deploy"
     )
-    assert result == snapshot
+    assert "Path contains invalid characters" in result
 
 
 def test_parse_recipe_with_multiple_actions_snapshot(snapshot, monkeypatch):
