@@ -145,6 +145,27 @@ def _write_archive_member(
             member_path.chmod(safe_mode)
 
 
+def _validate_archive_member(member: tarfile.TarInfo, target_dir: Path) -> Path:
+    """Validate an archive member and return its contained destination path."""
+    member_name = PurePosixPath(member.name)
+    if (
+        member_name.is_absolute()
+        or ".." in member_name.parts
+        or "\\" in member.name
+        or (member_name.parts and member_name.parts[0].endswith(":"))
+    ):
+        raise ValueError(f"Unsafe archive member path: {member.name}")
+    if not (member.isdir() or member.isfile()):
+        raise ValueError(f"Unsupported archive member type: {member.name}")
+
+    member_path = _ensure_within_base_path(
+        target_dir.joinpath(*member_name.parts), target_dir
+    )
+    if member_path.is_symlink():
+        raise ValueError(f"Archive member would overwrite a symlink: {member.name}")
+    return member_path
+
+
 def extract_tar_gz_archive(archive_path: str, output_dir: str) -> str:
     """
     Extract a tar.gz archive into a directory.
@@ -172,27 +193,10 @@ def extract_tar_gz_archive(archive_path: str, output_dir: str) -> str:
     safe_mkdir(target_dir, workspace_root, parents=True, exist_ok=True)
 
     with tarfile.open(archive_file, "r:gz") as tar:  # NOSONAR
-        safe_members: list[tuple[tarfile.TarInfo, Path]] = []
-        for member in tar.getmembers():
-            member_name = PurePosixPath(member.name)
-            if (
-                member_name.is_absolute()
-                or ".." in member_name.parts
-                or "\\" in member.name
-                or (member_name.parts and member_name.parts[0].endswith(":"))
-            ):
-                raise ValueError(f"Unsafe archive member path: {member.name}")
-            if not (member.isdir() or member.isfile()):
-                raise ValueError(f"Unsupported archive member type: {member.name}")
-
-            member_path = _ensure_within_base_path(
-                target_dir.joinpath(*member_name.parts), target_dir
-            )
-            if member_path.is_symlink():
-                raise ValueError(
-                    f"Archive member would overwrite a symlink: {member.name}"
-                )
-            safe_members.append((member, member_path))
+        safe_members = [
+            (member, _validate_archive_member(member, target_dir))
+            for member in tar.getmembers()
+        ]
 
         for member, member_path in safe_members:
             if member.isdir():
