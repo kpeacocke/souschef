@@ -7,6 +7,7 @@ import ast
 import importlib
 import json
 import re
+import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -6424,6 +6425,22 @@ def _validate_salt_master_url(master_url: str) -> str:
         raise ValueError(f"Invalid master_url format: {e}") from e
 
 
+class _SaltNoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Reject redirects for Salt requests carrying authentication data."""
+
+    def redirect_request(
+        self,
+        req: urllib.request.Request,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> None:
+        """Do not forward Salt credentials to a redirect target."""
+        return None
+
+
 @mcp.tool()
 def query_salt_master(
     master_url: str,
@@ -6493,7 +6510,12 @@ def query_salt_master(
             },
         )
 
-        with urllib.request.urlopen(login_req, context=ssl_context, timeout=30) as resp:  # noqa: S310
+        opener = urllib.request.build_opener(
+            urllib.request.HTTPSHandler(context=ssl_context),
+            _SaltNoRedirectHandler(),
+        )
+
+        with opener.open(login_req, timeout=30) as resp:  # noqa: S310
             import json as _json
 
             login_result = _json.loads(resp.read().decode("utf-8"))
@@ -6534,7 +6556,7 @@ def query_salt_master(
             },
         )
 
-        with urllib.request.urlopen(query_req, context=ssl_context, timeout=60) as resp:  # noqa: S310
+        with opener.open(query_req, timeout=60) as resp:  # noqa: S310
             query_result = _json.loads(resp.read().decode("utf-8"))
 
         return json.dumps(
@@ -7140,8 +7162,16 @@ def generate_powershell_role(
         safe_path = str(
             _normalise_workspace_path(script_path, "PowerShell script path")
         )
-    except Exception as e:
-        return format_error_with_context(e, "generating PowerShell role", script_path)
+    except (OSError, ValueError) as e:
+        return _json.dumps(
+            {
+                "status": "error",
+                "error": format_error_with_context(
+                    e, "generating PowerShell role", script_path
+                ),
+            },
+            indent=2,
+        )
     raw = _parse_powershell_script(safe_path)
     if raw.startswith("Error"):
         return _json.dumps({"status": "error", "error": raw}, indent=2)
@@ -7251,9 +7281,15 @@ def analyze_powershell_fidelity(
         safe_path = str(
             _normalise_workspace_path(script_path, "PowerShell script path")
         )
-    except Exception as e:
-        return format_error_with_context(
-            e, "analysing PowerShell migration fidelity", script_path
+    except (OSError, ValueError) as e:
+        return _json.dumps(
+            {
+                "status": "error",
+                "error": format_error_with_context(
+                    e, "analysing PowerShell migration fidelity", script_path
+                ),
+            },
+            indent=2,
         )
     raw = _parse_powershell_script(safe_path)
     if raw.startswith("Error"):
@@ -7348,11 +7384,17 @@ def generate_ansible_role_from_bash(
     """
     try:
         safe_path = str(_normalise_workspace_path(script_path, "Bash script path"))
-        return _generate_ansible_role_from_bash_file(safe_path, role_name)
-    except Exception as e:
-        return format_error_with_context(
-            e, "generating Ansible role from Bash", script_path
+    except (OSError, ValueError) as e:
+        return json.dumps(
+            {
+                "status": "error",
+                "error": format_error_with_context(
+                    e, "generating Ansible role from Bash", script_path
+                ),
+            },
+            indent=2,
         )
+    return _generate_ansible_role_from_bash_file(safe_path, role_name)
 
 
 # ==================== End V2.2 Bash Script Migration Tools ====================

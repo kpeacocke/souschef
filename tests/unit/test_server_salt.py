@@ -22,6 +22,13 @@ def allow_test_salt_master(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SOUSCHEF_ALLOWED_HOSTNAMES", "salt-master")
 
 
+def _mock_salt_opener(*responses: object) -> MagicMock:
+    """Create an opener returning the supplied response objects in sequence."""
+    opener = MagicMock()
+    opener.open.side_effect = responses
+    return opener
+
+
 # ---------------------------------------------------------------------------
 # parse_salt_sls MCP tool
 # ---------------------------------------------------------------------------
@@ -233,10 +240,8 @@ def test_server_query_salt_master_connection_error() -> None:
     """Connection errors are returned as JSON error."""
     import urllib.error
 
-    with patch(
-        "urllib.request.urlopen",
-        side_effect=urllib.error.URLError("Connection refused"),
-    ):
+    opener = _mock_salt_opener(urllib.error.URLError("Connection refused"))
+    with patch("urllib.request.build_opener", return_value=opener):
         result = query_salt_master("https://salt-master:8080", "user", "pass")
     result_dict = json.loads(result)
     assert result_dict["status"] == "error"
@@ -253,10 +258,8 @@ def test_server_query_salt_master_http_error() -> None:
         "https://salt-master:8080/login", 401, "Unauthorized", {}, response_body
     )
 
-    with patch(
-        "urllib.request.urlopen",
-        side_effect=error,
-    ):
+    opener = _mock_salt_opener(error)
+    with patch("urllib.request.build_opener", return_value=opener):
         result = query_salt_master("https://salt-master:8080", "user", "pass")
     result_dict = json.loads(result)
     assert result_dict["status"] == "error"
@@ -271,7 +274,8 @@ def test_server_query_salt_master_auth_no_token() -> None:
     mock_response.__exit__ = MagicMock(return_value=False)
     mock_response.read.return_value = json.dumps({"return": [{}]}).encode("utf-8")
 
-    with patch("urllib.request.urlopen", return_value=mock_response):
+    opener = _mock_salt_opener(mock_response)
+    with patch("urllib.request.build_opener", return_value=opener):
         result = query_salt_master("https://salt-master:8080", "user", "pass")
     result_dict = json.loads(result)
     assert result_dict["status"] == "error"
@@ -294,7 +298,8 @@ def test_server_query_salt_master_top_success() -> None:
         {"return": [{"minion1": {"base": ["common", "webserver"]}}]}
     ).encode("utf-8")
 
-    with patch("urllib.request.urlopen", side_effect=[login_response, query_response]):
+    opener = _mock_salt_opener(login_response, query_response)
+    with patch("urllib.request.build_opener", return_value=opener):
         result = query_salt_master(
             "https://salt-master:8080", "user", "pass", target="*", query_type="top"
         )
@@ -319,7 +324,8 @@ def test_server_query_salt_master_states_query() -> None:
     query_response.__exit__ = MagicMock(return_value=False)
     query_response.read.return_value = json.dumps({"return": [{}]}).encode("utf-8")
 
-    with patch("urllib.request.urlopen", side_effect=[login_response, query_response]):
+    opener = _mock_salt_opener(login_response, query_response)
+    with patch("urllib.request.build_opener", return_value=opener):
         result = query_salt_master(
             "https://salt-master:8080",
             "user",
@@ -346,7 +352,8 @@ def test_server_query_salt_master_pillar_query() -> None:
     query_response.__exit__ = MagicMock(return_value=False)
     query_response.read.return_value = json.dumps({"return": [{}]}).encode("utf-8")
 
-    with patch("urllib.request.urlopen", side_effect=[login_response, query_response]):
+    opener = _mock_salt_opener(login_response, query_response)
+    with patch("urllib.request.build_opener", return_value=opener):
         result = query_salt_master(
             "https://salt-master:8080",
             "user",
@@ -361,11 +368,59 @@ def test_server_query_salt_master_pillar_query() -> None:
 
 def test_server_query_salt_master_generic_exception() -> None:
     """Generic exceptions are handled as JSON error."""
-    with patch(
-        "urllib.request.urlopen",
-        side_effect=RuntimeError("unexpected failure"),
-    ):
+    opener = _mock_salt_opener(RuntimeError("unexpected failure"))
+    with patch("urllib.request.build_opener", return_value=opener):
         result = query_salt_master("https://salt-master:8080", "user", "pass")
     result_dict = json.loads(result)
     assert result_dict["status"] == "error"
     assert "unexpected failure" in result_dict["error"]
+
+
+def test_salt_redirect_handler_rejects_redirects_with_credentials() -> None:
+    """Authenticated Salt requests cannot follow redirects to other endpoints."""
+    import urllib.request
+
+    from souschef.server import _SaltNoRedirectHandler
+
+    request = urllib.request.Request(
+        "https://salt-master:8080/",
+        headers={"X-Auth-Token": "secret-token"},
+    )
+    handler = _SaltNoRedirectHandler()
+
+    redirected = handler.redirect_request(
+        request,
+        None,
+        302,
+        "Found",
+        {"Location": "http://127.0.0.1:8080/"},
+        "http://127.0.0.1:8080/",
+    )
+
+    assert redirected is None
+
+
+def test_query_salt_master_builds_opener_with_redirects_disabled() -> None:
+    """The authenticated Salt opener includes the redirect-rejecting handler."""
+    from souschef.server import _SaltNoRedirectHandler
+
+    login_response = MagicMock()
+    login_response.__enter__ = MagicMock(return_value=login_response)
+    login_response.__exit__ = MagicMock(return_value=False)
+    login_response.read.return_value = json.dumps(
+        {"return": [{"token": "secret-token"}]}
+    ).encode("utf-8")
+
+    query_response = MagicMock()
+    query_response.__enter__ = MagicMock(return_value=query_response)
+    query_response.__exit__ = MagicMock(return_value=False)
+    query_response.read.return_value = json.dumps({"return": []}).encode("utf-8")
+    opener = _mock_salt_opener(login_response, query_response)
+
+    with patch("urllib.request.build_opener", return_value=opener) as build_opener:
+        result = query_salt_master("https://salt-master:8080", "user", "pass")
+
+    assert json.loads(result)["status"] == "success"
+    handlers = build_opener.call_args.args
+    assert any(isinstance(handler, _SaltNoRedirectHandler) for handler in handlers)
+    assert opener.open.call_count == 2

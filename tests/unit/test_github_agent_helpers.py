@@ -183,6 +183,29 @@ class TestGitHubRequest:
 
         mock_request.assert_not_called()
 
+    @patch("souschef.github.agent_control.requests.request")
+    @patch.dict("os.environ", {"GITHUB_TOKEN": "ghp_test"})
+    def test_github_request_allows_leading_dot_repository_name(self, mock_request):
+        """A valid leading-dot repository such as .github passes path validation."""
+        mock_request.return_value = MagicMock(status_code=200)
+
+        response = _github_request("GET", "/repos/owner/.github/issues/1")
+
+        assert response is not None
+        mock_request.assert_called_once()
+
+    @pytest.mark.parametrize("repository", [".", ".."])
+    @patch("souschef.github.agent_control.requests.request")
+    @patch.dict("os.environ", {"GITHUB_TOKEN": "ghp_test"})
+    def test_github_request_rejects_dot_path_components(
+        self, mock_request, repository: str
+    ):
+        """Standalone dot components are not accepted as repository names."""
+        with pytest.raises(RuntimeError, match="Invalid GitHub issue API path"):
+            _github_request("GET", f"/repos/owner/{repository}/issues/1")
+
+        mock_request.assert_not_called()
+
 
 class TestIssueHasLabel:
     """Tests for _issue_has_label function."""

@@ -506,6 +506,42 @@ class TestFilesystemOperations:
 
         assert (output_dir / "cookbook/recipe.rb").read_bytes() == b"safe content"
 
+    def test_extract_tar_gz_archive_preserves_safe_file_modes(
+        self, tmp_path: Path
+    ) -> None:
+        """Extraction preserves private/executable modes and strips unsafe writes."""
+        import io
+        import stat
+        import tarfile
+
+        from souschef.filesystem.operations import extract_tar_gz_archive
+
+        archive_path = tmp_path / "bundle.tar.gz"
+        file_modes = {
+            "private.txt": (0o600, 0o600),
+            "script.sh": (0o755, 0o755),
+            "writable.txt": (0o666, 0o644),
+            "setuid.sh": (0o4755, 0o755),
+        }
+        with tarfile.open(archive_path, "w:gz") as archive:
+            for name, (source_mode, _) in file_modes.items():
+                content = b"safe content"
+                member = tarfile.TarInfo(name)
+                member.mode = source_mode
+                member.size = len(content)
+                archive.addfile(member, io.BytesIO(content))
+
+        with patch(
+            "souschef.filesystem.operations._get_workspace_root",
+            return_value=tmp_path,
+        ):
+            output_dir = Path(
+                extract_tar_gz_archive(str(archive_path), str(tmp_path / "out"))
+            )
+
+        for name, (_, expected_mode) in file_modes.items():
+            assert stat.S_IMODE((output_dir / name).stat().st_mode) == expected_mode
+
     def test_extract_tar_gz_archive_rejects_parent_traversal(
         self, tmp_path: Path
     ) -> None:

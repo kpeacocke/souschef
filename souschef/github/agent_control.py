@@ -431,7 +431,7 @@ def _github_request(
     """
     issue_path_pattern = (
         r"/repos/[A-Za-z0-9][A-Za-z0-9-]{0,38}/"
-        r"[A-Za-z0-9_-][A-Za-z0-9_.-]{0,99}/issues/[1-9][0-9]*"
+        r"(?!\.{1,2}/)[A-Za-z0-9._-]{1,100}/issues/[1-9][0-9]*"
         r"(?:/(?:labels(?:/[^/]+)?|comments))?"
     )
     if not re.fullmatch(issue_path_pattern, path):

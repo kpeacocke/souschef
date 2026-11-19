@@ -21,6 +21,14 @@ def test_generate_ansible_role_from_bash_wrapper_calls_internal() -> None:
     mock_internal.assert_called_once_with(str(Path.cwd() / "script.sh"), "role")
 
 
+def test_generate_ansible_role_from_bash_returns_json_for_invalid_path() -> None:
+    """Keep Bash role path-validation failures in the documented JSON shape."""
+    result = json.loads(server.generate_ansible_role_from_bash("\x00"))
+
+    assert result["status"] == "error"
+    assert "null bytes" in result["error"]
+
+
 def test_convert_bash_to_ansible_returns_json_for_invalid_path() -> None:
     """Keep Bash conversion failures in the documented JSON response shape."""
     result = json.loads(server.convert_bash_to_ansible("\x00"))

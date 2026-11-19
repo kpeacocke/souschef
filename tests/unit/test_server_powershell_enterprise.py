@@ -113,6 +113,15 @@ class TestGeneratePowershellRole:
         result = json.loads(raw)
         assert result["status"] == "error"
 
+    def test_invalid_path_returns_json_error(self) -> None:
+        """Path-validation failures preserve the documented JSON response."""
+        from souschef.server import generate_powershell_role
+
+        result = json.loads(generate_powershell_role("\x00"))
+
+        assert result["status"] == "error"
+        assert "null bytes" in result["error"]
+
     def test_role_files_contain_tasks_main(self, tmp_path: Path) -> None:
         """Generated role includes tasks/main.yml."""
         from souschef.server import generate_powershell_role
@@ -233,6 +242,15 @@ class TestAnalyzePowershellFidelity:
 
         result = json.loads(analyze_powershell_fidelity(str(tmp_path / "nope.ps1")))
         assert result.get("status") == "error"
+
+    def test_invalid_path_returns_json_error(self) -> None:
+        """Path-validation failures preserve the documented JSON response."""
+        from souschef.server import analyze_powershell_fidelity
+
+        result = json.loads(analyze_powershell_fidelity("\x00"))
+
+        assert result["status"] == "error"
+        assert "null bytes" in result["error"]
 
     def test_high_fidelity_script(self, tmp_path: Path) -> None:
         """Script with only recognised actions has fidelity_score > 0."""

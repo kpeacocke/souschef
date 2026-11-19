@@ -1,5 +1,6 @@
 """Filesystem operations for Chef cookbook exploration."""
 
+import os
 import shutil
 import tarfile
 from pathlib import Path, PurePosixPath
@@ -118,6 +119,32 @@ def create_tar_gz_archive(source_dir: str, output_path: str) -> str:
     return str(output_file)
 
 
+def _write_archive_member(
+    archive: tarfile.TarFile, member: tarfile.TarInfo, member_path: Path
+) -> None:
+    """Copy a validated regular member with safe initial and final permissions."""
+    source_file = archive.extractfile(member)
+    if source_file is None:
+        raise ValueError(f"Unable to read archive member: {member.name}")
+
+    file_descriptor = os.open(
+        member_path,
+        os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0),
+        0o600,
+    )
+    safe_mode = member.mode & 0o777 & ~0o022
+    with source_file, os.fdopen(file_descriptor, "wb") as output_file:
+        if hasattr(os, "fchmod"):
+            os.fchmod(output_file.fileno(), 0o600)
+        else:
+            member_path.chmod(0o600)
+        shutil.copyfileobj(source_file, output_file)
+        if hasattr(os, "fchmod"):
+            os.fchmod(output_file.fileno(), safe_mode)
+        else:
+            member_path.chmod(safe_mode)
+
+
 def extract_tar_gz_archive(archive_path: str, output_dir: str) -> str:
     """
     Extract a tar.gz archive into a directory.
@@ -178,10 +205,6 @@ def extract_tar_gz_archive(archive_path: str, output_dir: str) -> str:
                 raise ValueError(
                     f"Archive member would overwrite a symlink: {member.name}"
                 )
-            source_file = tar.extractfile(member)
-            if source_file is None:
-                raise ValueError(f"Unable to read archive member: {member.name}")
-            with source_file, member_path.open("wb") as output_file:
-                shutil.copyfileobj(source_file, output_file)
+            _write_archive_member(tar, member, member_path)
 
     return str(target_dir)
