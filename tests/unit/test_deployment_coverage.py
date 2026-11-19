@@ -18,7 +18,13 @@ class TestAnalyseRecipesErrorHandling:
         """Test recipe analysis with empty recipes directory."""
         from souschef.deployment import _analyse_recipes
 
-        with patch("souschef.deployment._safe_join") as mock_join:
+        with (
+            patch("souschef.deployment._safe_join") as mock_join,
+            patch(
+                "souschef.deployment._resolve_path_under_base",
+                side_effect=lambda path, _: path,
+            ),
+        ):
             recipes_dir = MagicMock()
             recipes_dir.exists.return_value = True
             recipes_dir.glob.return_value = []
@@ -46,7 +52,13 @@ class TestAnalyseRecipesErrorHandling:
         """Test recipe analysis with multiple recipe files."""
         from souschef.deployment import _analyse_recipes
 
-        with patch("souschef.deployment._safe_join") as mock_join:
+        with (
+            patch("souschef.deployment._safe_join") as mock_join,
+            patch(
+                "souschef.deployment._resolve_path_under_base",
+                side_effect=lambda path, _: path,
+            ),
+        ):
             recipes_dir = MagicMock()
             recipes_dir.exists.return_value = True
 
@@ -110,6 +122,10 @@ class TestAnalyseAttributesForSurveyErrorHandling:
         with (
             patch("souschef.deployment._safe_join") as mock_join,
             patch("builtins.open", side_effect=OSError("File read error")),
+            patch(
+                "souschef.deployment._resolve_path_under_base",
+                side_effect=lambda path, _: path,
+            ),
         ):
             attributes_dir = MagicMock()
             attributes_dir.exists.return_value = True
@@ -128,7 +144,13 @@ class TestAnalyseAttributesForSurveyErrorHandling:
         """Test attribute analysis with valid attribute file content."""
         from souschef.deployment import _analyse_attributes_for_survey
 
-        with patch("souschef.deployment._safe_join") as mock_join:
+        with (
+            patch("souschef.deployment._safe_join") as mock_join,
+            patch(
+                "souschef.deployment._resolve_path_under_base",
+                side_effect=lambda path, _: path,
+            ),
+        ):
             attributes_dir = MagicMock()
             attributes_dir.exists.return_value = True
 
@@ -668,22 +690,28 @@ class TestAnalyseChefDeploymentPatternEdgeCases:
         assert result["deployment_steps"] == []
         assert result["health_checks"] == []
 
-    @patch("souschef.deployment._safe_join")
     def test_analyse_chef_deployment_pattern_malformed_recipe(
-        self, mock_join: MagicMock
+        self,
     ) -> None:
         """Test pattern analysis handles malformed recipes gracefully."""
         from souschef.deployment import _analyse_chef_deployment_pattern
 
-        recipes_dir = MagicMock()
-        recipes_dir.exists.return_value = True
+        with (
+            patch("souschef.deployment._safe_join") as mock_join,
+            patch(
+                "souschef.deployment._resolve_path_under_base",
+                side_effect=lambda path, _: path,
+            ),
+        ):
+            recipes_dir = MagicMock()
+            recipes_dir.exists.return_value = True
 
-        recipe = MagicMock()
-        recipe.open.side_effect = OSError("Read error")
-        recipes_dir.glob.return_value = [recipe]
-        mock_join.return_value = recipes_dir
+            recipe = MagicMock()
+            recipe.open.side_effect = OSError("Read error")
+            recipes_dir.glob.return_value = [recipe]
+            mock_join.return_value = recipes_dir
 
-        result = _analyse_chef_deployment_pattern(Path("/fake"))
+            result = _analyse_chef_deployment_pattern(Path("/fake"))
 
         assert isinstance(result, dict)
         # Should still return valid structure despite read error
@@ -863,7 +891,13 @@ class TestAnalyseCookbooksDirectoryEdgeCases:
         """Test directory analysis with no cookbooks."""
         from souschef.deployment import _analyse_cookbooks_directory
 
-        with patch.object(Path, "iterdir") as mock_iterdir:
+        with (
+            patch.object(Path, "iterdir") as mock_iterdir,
+            patch(
+                "souschef.deployment._resolve_path_under_base",
+                side_effect=lambda path, _: path,
+            ),
+        ):
             mock_iterdir.return_value = []
 
             result = _analyse_cookbooks_directory(Path("/fake"))
@@ -888,7 +922,13 @@ class TestAnalyseCookbooksDirectoryEdgeCases:
             "survey_fields": [],
         }
 
-        with patch.object(Path, "iterdir") as mock_iterdir:
+        with (
+            patch.object(Path, "iterdir") as mock_iterdir,
+            patch(
+                "souschef.deployment._resolve_path_under_base",
+                side_effect=lambda path, _: path,
+            ),
+        ):
             # Create mock entries - mix of directories and files
             dir1 = MagicMock()
             dir1.is_dir.return_value = True
@@ -908,6 +948,81 @@ class TestAnalyseCookbooksDirectoryEdgeCases:
 
             # Should only process directories, not the file
             assert result["total_cookbooks"] == 2
+
+
+class TestCookbookWorkspaceSymlinks:
+    """Test that cookbook scans reject paths resolving outside the workspace."""
+
+    def test_analyse_cookbooks_directory_rejects_external_cookbook_symlink(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A child cookbook symlink cannot expand the trusted workspace."""
+        from souschef.deployment import _analyse_cookbooks_directory
+
+        workspace = tmp_path / "workspace"
+        cookbooks_dir = workspace / "cookbooks"
+        external_cookbook = tmp_path / "private-cookbook"
+        cookbooks_dir.mkdir(parents=True)
+        (external_cookbook / "recipes").mkdir(parents=True)
+        (external_cookbook / "metadata.rb").write_text("name 'private'\n")
+        (external_cookbook / "recipes" / "default.rb").write_text(
+            "file '/private/data'\n"
+        )
+        (cookbooks_dir / "private").symlink_to(
+            external_cookbook, target_is_directory=True
+        )
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(workspace))
+
+        with pytest.raises(ValueError, match="Path traversal attempt"):
+            _analyse_cookbooks_directory(cookbooks_dir)
+
+    def test_analyse_attributes_rejects_external_attribute_symlink(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Attribute files are validated before they are opened."""
+        from souschef.deployment import _analyse_attributes_for_survey
+
+        workspace = tmp_path / "workspace"
+        cookbook = workspace / "cookbooks" / "web"
+        attributes = cookbook / "attributes"
+        attributes.mkdir(parents=True)
+        external_file = tmp_path / "private-attributes.rb"
+        external_file.write_text("default['secret'] = 'private'\n")
+        (attributes / "default.rb").symlink_to(external_file)
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(workspace))
+
+        with pytest.raises(ValueError, match="Path traversal attempt"):
+            _analyse_attributes_for_survey(cookbook)
+
+    @pytest.mark.parametrize(
+        ("analyser_name", "arguments"),
+        [
+            ("_analyse_chef_deployment_pattern", ()),
+            ("_analyse_application_cookbook", ("web",)),
+        ],
+    )
+    def test_recipe_analysers_reject_external_recipe_symlink(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        analyser_name: str,
+        arguments: tuple[str, ...],
+    ) -> None:
+        """Deployment and application scans validate each recipe before reading."""
+        import souschef.deployment as deployment
+
+        workspace = tmp_path / "workspace"
+        cookbook = workspace / "cookbooks" / "web"
+        recipes = cookbook / "recipes"
+        recipes.mkdir(parents=True)
+        external_recipe = tmp_path / "private-recipe.rb"
+        external_recipe.write_text("execute 'private command'\n")
+        (recipes / "default.rb").symlink_to(external_recipe)
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(workspace))
+
+        analyser = getattr(deployment, analyser_name)
+        with pytest.raises(ValueError, match="Path traversal attempt"):
+            analyser(cookbook, *arguments)
 
 
 class TestExtractAttributesEdgeCases:

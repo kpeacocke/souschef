@@ -26,7 +26,11 @@ from souschef.core.metrics import (
     EffortMetrics,
     categorize_complexity,
 )
-from souschef.core.path_utils import _safe_join
+from souschef.core.path_utils import (
+    _get_workspace_root,
+    _resolve_path_under_base,
+    _safe_join,
+)
 from souschef.core.url_validation import validate_user_provided_url
 
 # Maximum length for attribute values in Chef attribute parsing
@@ -56,7 +60,10 @@ def generate_awx_job_template_from_cookbook(
                 "Suggestion: Provide a valid cookbook name"
             )
 
-        cookbook = validate_cookbook_structure(cookbook_path)
+        safe_cookbook_path = _resolve_path_under_base(
+            cookbook_path, _get_workspace_root()
+        )
+        cookbook = validate_cookbook_structure(str(safe_cookbook_path))
         cookbook_analysis = _analyse_cookbook_for_awx(cookbook, cookbook_name)
         job_template = _generate_awx_job_template(
             cookbook_analysis, cookbook_name, target_environment, include_survey
@@ -185,8 +192,11 @@ def generate_awx_project_from_cookbooks(
                 "Suggestion: Provide a descriptive name for the AWX project"
             )
 
+        safe_cookbooks_directory = _resolve_path_under_base(
+            cookbooks_directory, _get_workspace_root()
+        )
         cookbooks_path = validate_directory_exists(
-            cookbooks_directory, "cookbooks directory"
+            str(safe_cookbooks_directory), "cookbooks directory"
         )
 
         # Analyze all cookbooks
@@ -330,7 +340,10 @@ def convert_chef_deployment_to_ansible_strategy(
     Override auto-detection by specifying explicit pattern.
     """
     try:
-        cookbook = validate_cookbook_structure(cookbook_path)
+        safe_cookbook_path = _resolve_path_under_base(
+            cookbook_path, _get_workspace_root()
+        )
+        cookbook = validate_cookbook_structure(str(safe_cookbook_path))
 
         # Validate deployment pattern
         valid_patterns = ["auto", "blue_green", "canary", "rolling_update"]
@@ -651,7 +664,10 @@ def analyse_chef_application_patterns(
     Application type helps tune recommendations for web/database/service workloads.
     """
     try:
-        cookbook = validate_cookbook_structure(cookbook_path)
+        safe_cookbook_path = _resolve_path_under_base(
+            cookbook_path, _get_workspace_root()
+        )
+        cookbook = validate_cookbook_structure(str(safe_cookbook_path))
 
         # Validate application type
         valid_app_types = ["web_application", "database", "service", "batch", "api"]
@@ -711,15 +727,18 @@ def _analyse_recipes(cookbook_path: Path) -> list[dict[str, Any]]:
         List of recipe metadata dicts
 
     """
+    workspace_root = _get_workspace_root()
+    safe_cookbook_path = _resolve_path_under_base(cookbook_path, workspace_root)
     recipes = []
-    recipes_dir = _safe_join(cookbook_path, "recipes")
+    recipes_dir = _safe_join(safe_cookbook_path, "recipes")
     if recipes_dir.exists():  # NOSONAR
         for recipe_file in recipes_dir.glob("*.rb"):
+            safe_recipe_file = _resolve_path_under_base(recipe_file, workspace_root)
             recipes.append(
                 {
-                    "name": recipe_file.stem,
-                    "file": str(recipe_file),
-                    "size": recipe_file.stat().st_size,
+                    "name": safe_recipe_file.stem,
+                    "file": str(safe_recipe_file),
+                    "size": safe_recipe_file.stat().st_size,
                 }
             )
     return recipes
@@ -738,14 +757,17 @@ def _analyse_attributes_for_survey(
         Tuple of (attributes dict, survey fields list)
 
     """
+    workspace_root = _get_workspace_root()
+    safe_cookbook_path = _resolve_path_under_base(cookbook_path, workspace_root)
     attributes = {}
     survey_fields = []
-    attributes_dir = _safe_join(cookbook_path, "attributes")
+    attributes_dir = _safe_join(safe_cookbook_path, "attributes")
 
     if attributes_dir.exists():  # NOSONAR
         for attr_file in attributes_dir.glob("*.rb"):
+            safe_attr_file = _resolve_path_under_base(attr_file, workspace_root)
             try:
-                with attr_file.open("r") as f:
+                with safe_attr_file.open("r") as f:
                     content = f.read()
 
                 # Extract attribute declarations
@@ -825,11 +847,14 @@ def _analyse_cookbook_for_awx(cookbook_path: Path, cookbook_name: str) -> dict:
         Analysis dict with recipes, attributes, dependencies, templates, files, surveys
 
     """
-    # Analyze each dimension independently
-    recipes = _analyse_recipes(cookbook_path)
-    attributes, survey_fields = _analyse_attributes_for_survey(cookbook_path)
-    dependencies = _analyse_metadata_dependencies(cookbook_path)
-    templates, files = _collect_static_files(cookbook_path)
+    workspace_root = _get_workspace_root()
+    safe_cookbook_path = _resolve_path_under_base(cookbook_path, workspace_root)
+
+    # Analyse each dimension independently.
+    recipes = _analyse_recipes(safe_cookbook_path)
+    attributes, survey_fields = _analyse_attributes_for_survey(safe_cookbook_path)
+    dependencies = _analyse_metadata_dependencies(safe_cookbook_path)
+    templates, files = _collect_static_files(safe_cookbook_path)
 
     # Assemble complete analysis
     return {
@@ -1186,6 +1211,8 @@ def _generate_survey_fields_from_attributes(attributes: dict) -> list:
 
 def _analyse_cookbooks_directory(cookbooks_path: Path) -> dict:
     """Analyse entire cookbooks directory structure."""
+    workspace_root = _get_workspace_root()
+    safe_cookbooks_path = _resolve_path_under_base(cookbooks_path, workspace_root)
     analysis: dict[str, Any] = {
         "total_cookbooks": 0,
         "cookbooks": {},
@@ -1194,7 +1221,8 @@ def _analyse_cookbooks_directory(cookbooks_path: Path) -> dict:
         "total_files": 0,
     }
 
-    for cookbook_dir in cookbooks_path.iterdir():
+    for cookbook_entry in safe_cookbooks_path.iterdir():
+        cookbook_dir = _resolve_path_under_base(cookbook_entry, workspace_root)
         if not cookbook_dir.is_dir():
             continue
 
@@ -1217,6 +1245,8 @@ def _analyse_cookbooks_directory(cookbooks_path: Path) -> dict:
 
 def _analyse_chef_deployment_pattern(cookbook_path: Path) -> dict:
     """Analyse Chef cookbook for deployment patterns."""
+    workspace_root = _get_workspace_root()
+    safe_cookbook_path = _resolve_path_under_base(cookbook_path, workspace_root)
     analysis: dict[str, Any] = {
         "deployment_steps": [],
         "health_checks": [],
@@ -1227,11 +1257,12 @@ def _analyse_chef_deployment_pattern(cookbook_path: Path) -> dict:
     }
 
     # Analyze recipes for deployment indicators
-    recipes_dir = _safe_join(cookbook_path, "recipes")
+    recipes_dir = _safe_join(safe_cookbook_path, "recipes")
     if recipes_dir.exists():  # NOSONAR
         for recipe_file in recipes_dir.glob("*.rb"):
+            safe_recipe_file = _resolve_path_under_base(recipe_file, workspace_root)
             try:
-                with recipe_file.open("r") as f:
+                with safe_recipe_file.open("r") as f:
                     content = f.read()
 
                 # Extract deployment steps
@@ -1579,6 +1610,8 @@ def _assess_complexity_from_resource_count(
 
 def _analyse_application_cookbook(cookbook_path: Path, app_type: str) -> dict:
     """Analyse Chef cookbook for application deployment patterns."""
+    workspace_root = _get_workspace_root()
+    safe_cookbook_path = _resolve_path_under_base(cookbook_path, workspace_root)
     analysis: dict[str, Any] = {
         "application_type": app_type,
         "deployment_patterns": [],
@@ -1589,11 +1622,12 @@ def _analyse_application_cookbook(cookbook_path: Path, app_type: str) -> dict:
     }
 
     # Analyze recipes
-    recipes_dir = _safe_join(cookbook_path, "recipes")
+    recipes_dir = _safe_join(safe_cookbook_path, "recipes")
     if recipes_dir.exists():  # NOSONAR
         for recipe_file in recipes_dir.glob("*.rb"):
+            safe_recipe_file = _resolve_path_under_base(recipe_file, workspace_root)
             try:
-                with recipe_file.open("r") as f:
+                with safe_recipe_file.open("r") as f:
                     content = f.read()
 
                 # Count resources

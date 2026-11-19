@@ -13,6 +13,7 @@ __pycache__/
 env/
 venv/
 ENV/
+.venv/
 env.bak/
 venv.bak/
 pip-log.txt
@@ -28,6 +29,7 @@ coverage.html
 htmlcov/
 *.cover
 *.log
+tests/
 
 # Type checking and linting
 .mypy_cache/

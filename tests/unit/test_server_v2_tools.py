@@ -13,8 +13,8 @@ from souschef.server import (
 )
 
 
-def test_deploy_v2_migration_returns_ready_status() -> None:
-    """Test deploy returns deployment ready payload."""
+def test_deploy_v2_migration_reports_unimplemented() -> None:
+    """Test deploy does not imply a remote action was performed."""
     result = deploy_v2_migration(
         migration_id="m123",
         ansible_url="https://ansible.example",
@@ -23,25 +23,27 @@ def test_deploy_v2_migration_returns_ready_status() -> None:
     )
 
     data = json.loads(result)
-    assert data["status"] == "deployment_ready"
+    assert data["status"] == "not_implemented"
     assert data["migration_id"] == "m123"
+    assert "No AWX/AAP deployment was performed" in data["message"]
 
 
-def test_validate_v2_playbooks_returns_entries() -> None:
-    """Test playbook validation returns per-playbook results."""
+def test_validate_v2_playbooks_reports_unimplemented() -> None:
+    """Test validation does not claim uninspected playbooks passed."""
     result = validate_v2_playbooks(
         playbook_paths="a.yml,b.yml",
         target_ansible_version="2.16",
     )
 
     data = json.loads(result)
-    assert data["playbooks_validated"] == 2
+    assert data["status"] == "not_implemented"
+    assert data["validation_performed"] is False
+    assert data["playbooks_validated"] == 0
     assert data["target_ansible_version"] == "2.16"
-    assert len(data["playbooks"]) == 2
 
 
-def test_rollback_v2_migration_with_ids() -> None:
-    """Test rollback returns deleted resources list."""
+def test_rollback_v2_migration_reports_no_deletion() -> None:
+    """Test rollback does not claim unperformed remote deletions."""
     result = rollback_v2_migration(
         ansible_url="https://ansible.example",
         ansible_username="user",
@@ -52,10 +54,13 @@ def test_rollback_v2_migration_with_ids() -> None:
     )
 
     data = json.loads(result)
-    assert data["status"] == "rollback_complete"
-    assert "job_template:3" in data["deleted_resources"]
-    assert "inventory:1" in data["deleted_resources"]
-    assert "project:2" in data["deleted_resources"]
+    assert data["status"] == "not_implemented"
+    assert data["rollback_performed"] is False
+    assert "job_template:3" in data["requested_resources"]
+    assert "inventory:1" in data["requested_resources"]
+    assert "project:2" in data["requested_resources"]
+    assert "No AWX/AAP resources were deleted" in data["message"]
+    assert "pass" not in result
 
 
 def test_query_chef_server_success() -> None:

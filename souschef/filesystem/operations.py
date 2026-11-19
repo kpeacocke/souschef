@@ -1,7 +1,9 @@
 """Filesystem operations for Chef cookbook exploration."""
 
+import os
+import shutil
 import tarfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from souschef.core.constants import (
     ERROR_FILE_NOT_FOUND,
@@ -117,6 +119,32 @@ def create_tar_gz_archive(source_dir: str, output_path: str) -> str:
     return str(output_file)
 
 
+def _write_archive_member(
+    archive: tarfile.TarFile, member: tarfile.TarInfo, member_path: Path
+) -> None:
+    """Copy a validated regular member with safe initial and final permissions."""
+    source_file = archive.extractfile(member)
+    if source_file is None:
+        raise ValueError(f"Unable to read archive member: {member.name}")
+
+    file_descriptor = os.open(
+        member_path,
+        os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0),
+        0o600,
+    )
+    safe_mode = member.mode & 0o777 & ~0o022
+    with source_file, os.fdopen(file_descriptor, "wb") as output_file:
+        if hasattr(os, "fchmod"):
+            os.fchmod(output_file.fileno(), 0o600)
+        else:
+            member_path.chmod(0o600)
+        shutil.copyfileobj(source_file, output_file)
+        if hasattr(os, "fchmod"):
+            os.fchmod(output_file.fileno(), safe_mode)
+        else:
+            member_path.chmod(safe_mode)
+
+
 def extract_tar_gz_archive(archive_path: str, output_dir: str) -> str:
     """
     Extract a tar.gz archive into a directory.
@@ -144,15 +172,39 @@ def extract_tar_gz_archive(archive_path: str, output_dir: str) -> str:
     safe_mkdir(target_dir, workspace_root, parents=True, exist_ok=True)
 
     with tarfile.open(archive_file, "r:gz") as tar:  # NOSONAR
+        safe_members: list[tuple[tarfile.TarInfo, Path]] = []
         for member in tar.getmembers():
-            member_path = target_dir / member.name
-            _ensure_within_base_path(member_path, target_dir)
-        try:
-            tar.extractall(
-                target_dir, filter="data"
-            )  # NOSONAR - validated members before extract
-        except TypeError:  # pragma: no cover
-            # Older Python versions do not support the filter argument.
-            tar.extractall(target_dir)  # NOSONAR - validated members before extract
+            member_name = PurePosixPath(member.name)
+            if (
+                member_name.is_absolute()
+                or ".." in member_name.parts
+                or "\\" in member.name
+                or (member_name.parts and member_name.parts[0].endswith(":"))
+            ):
+                raise ValueError(f"Unsafe archive member path: {member.name}")
+            if not (member.isdir() or member.isfile()):
+                raise ValueError(f"Unsupported archive member type: {member.name}")
+
+            member_path = _ensure_within_base_path(
+                target_dir.joinpath(*member_name.parts), target_dir
+            )
+            if member_path.is_symlink():
+                raise ValueError(
+                    f"Archive member would overwrite a symlink: {member.name}"
+                )
+            safe_members.append((member, member_path))
+
+        for member, member_path in safe_members:
+            if member.isdir():
+                safe_mkdir(member_path, workspace_root, parents=True, exist_ok=True)
+                continue
+
+            safe_mkdir(member_path.parent, workspace_root, parents=True, exist_ok=True)
+            member_path = _ensure_within_base_path(member_path, target_dir)
+            if member_path.is_symlink():
+                raise ValueError(
+                    f"Archive member would overwrite a symlink: {member.name}"
+                )
+            _write_archive_member(tar, member, member_path)
 
     return str(target_dir)

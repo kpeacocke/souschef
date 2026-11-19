@@ -2,7 +2,7 @@
 
 Transform Chef, SaltStack, Puppet, PowerShell, and Bash automation to Ansible, and plan Ansible version upgrades. Works with any AI assistant via MCP (Model Context Protocol)—Claude, GPT-4, GitHub Copilot, Red Hat AI, local models, and more.
 
-**Quick Facts:** MIT License | Python 3.10+ | 95 MCP Tools | 97% Test Coverage
+**Quick Facts:** MIT License | Python 3.10+ | 105 MCP Tools | Test coverage reported by CI
 
 The optional web UI and Pillow-dependent development packages require Python 3.11+.
 Core MCP server support remains Python 3.10+.
@@ -10,7 +10,7 @@ Core MCP server support remains Python 3.10+.
 [![GitHub release](https://img.shields.io/github/release/kpeacocke/souschef)](https://github.com/kpeacocke/souschef/releases)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Test Coverage](https://img.shields.io/badge/coverage-97%25-green.svg)](htmlcov/index.html)
+[![Test Coverage](https://img.shields.io/badge/coverage-99%25-green.svg)](htmlcov/index.html)
 [![Code style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![Type Checked: mypy](https://img.shields.io/badge/type%20checked-mypy-blue.svg)](http://mypy-lang.org/)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=kpeacocke_souschef&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=kpeacocke_souschef)
@@ -62,10 +62,10 @@ Poetry. Rebuild images to change dependencies; see the
 
 ## Key Features
 
-- **95 MCP tools** for Chef migration, SaltStack migration, Puppet migration, PowerShell migration, Bash script migration, and Ansible upgrades
+- **105 registered MCP tools** for Chef migration, SaltStack migration, Puppet migration, PowerShell migration, Bash script migration, and Ansible upgrades
 - **Web UI** with interactive migration planner and visualisation (including Salt, Puppet, PowerShell, and Bash tabs)
 - **CLI** for automation and CI/CD integration
-- **Production-ready** with 91% test coverage and comprehensive validation
+- **Production-ready** with 99% test coverage and comprehensive validation
 - **Model-agnostic** — works with any AI assistant supporting MCP
 - **Chef Server ingestion** with dependency closure and offline bundle export
 
@@ -257,7 +257,7 @@ Validation profiles: `basic`, `moderate`, `safety`, `shared`, `production`.
 
 - **[Quick Start Guide](docs/getting-started/quick-start.md)** — Get running in 5 minutes
 - **[Production Safety](docs/migration-guide/safety-and-validation.md)** — Validate migrations before deploying ⚠️
-- **[User Guide](docs/user-guide/mcp-tools.md)** — All 95 tools explained with examples
+- **[User Guide](docs/user-guide/mcp-tools.md)** — Primary user-facing tools explained with examples
 - **[Chef Migration Guide](docs/migration-guide/overview.md)** — Step-by-step Chef-to-Ansible migration process
 - **[Salt Migration Guide](docs/migration-guide/salt-migration.md)** — Step-by-step SaltStack-to-Ansible migration process
 - **[Bash Migration Guide](docs/migration-guide/bash-migration.md)** — Step-by-step Bash provisioning script migration process

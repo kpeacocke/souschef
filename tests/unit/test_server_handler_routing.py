@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from souschef.server import generate_handler_routing_config
 
 
@@ -94,3 +96,26 @@ def test_generate_handler_routing_config_invalid_path(tmp_path: Path) -> None:
     data = json.loads(result)
     assert data["status"] == "error"
     assert "Cookbook path must be a directory" in data["error"]
+
+
+def test_generate_handler_routing_config_rejects_symlink_escape(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Do not read handler files linked outside the configured workspace."""
+    workspace = tmp_path / "workspace"
+    cookbook_dir = workspace / "cookbook"
+    libraries_dir = cookbook_dir / "libraries"
+    libraries_dir.mkdir(parents=True)
+    outside_file = tmp_path / "outside.rb"
+    outside_file.write_text("private handler content", encoding="utf-8")
+    try:
+        (libraries_dir / "handler.rb").symlink_to(outside_file)
+    except OSError as exc:
+        pytest.skip(f"Symlink creation is unavailable: {exc}")
+
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(workspace))
+
+    result = json.loads(generate_handler_routing_config(str(cookbook_dir)))
+
+    assert result["status"] == "error"
+    assert "Path traversal attempt" in result["error"]

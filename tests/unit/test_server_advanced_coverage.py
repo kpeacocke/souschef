@@ -63,6 +63,17 @@ class TestPathNormalization:
         with pytest.raises(ValueError, match="must be absolute"):
             server._sanitize_cookbook_paths_input("/some/path")
 
+    def test_sanitize_cookbook_paths_rejects_outside_workspace(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Migration assessment paths must remain inside the configured workspace."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(workspace))
+
+        with pytest.raises(ValueError, match="escapes"):
+            server._sanitize_cookbook_paths_input(str(tmp_path / "outside"))
+
 
 class TestValidationTool:
     """Coverage for validation tool."""

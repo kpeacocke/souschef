@@ -7,6 +7,7 @@ import ast
 import importlib
 import json
 import re
+import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -1457,7 +1458,12 @@ def _validate_databags_directory(
             "Suggestion: Provide the path to your Chef data_bags directory"
         )
 
-    databags_path = _normalize_path(databags_directory)
+    try:
+        databags_path = _normalise_workspace_path(
+            databags_directory, "Databags directory path"
+        )
+    except ValueError as e:
+        return None, f"Error: Invalid databags directory path: {e}"
     if not databags_path.exists():  # NOSONAR
         return None, (
             f"Error: Data bags directory not found: {databags_directory}\n\n"
@@ -1585,11 +1591,12 @@ def analyse_chef_databag_usage(cookbook_path: str, databags_path: str = "") -> s
         Analysis of data bag usage and migration recommendations
 
     """
-    cookbook_path = str(_normalize_path(cookbook_path))
-    if databags_path:
-        databags_path = str(_normalize_path(databags_path))
     try:
-        cookbook = _normalize_path(cookbook_path)
+        cookbook = _normalise_workspace_path(cookbook_path, _COOKBOOK_PATH_LABEL)
+        if databags_path:
+            databags_path = str(
+                _normalise_workspace_path(databags_path, "Databags directory path")
+            )
         if not cookbook.exists():  # NOSONAR
             return f"Error: Cookbook path not found: {cookbook_path}"
 
@@ -1692,7 +1699,9 @@ def generate_inventory_from_chef_environments(
 
     """
     try:
-        env_path = _normalize_path(environments_directory)
+        env_path = _normalise_workspace_path(
+            environments_directory, "Environments directory path"
+        )
         if not env_path.exists():  # NOSONAR
             return f"Error: Environments directory not found: {environments_directory}"
 
@@ -1753,7 +1762,7 @@ def analyse_chef_environment_usage(
 
     """
     try:
-        cookbook = _normalize_path(cookbook_path)
+        cookbook = _normalise_workspace_path(cookbook_path, _COOKBOOK_PATH_LABEL)
         if not cookbook.exists():  # NOSONAR
             return f"Error: Cookbook path not found: {cookbook_path}"
 
@@ -1763,7 +1772,9 @@ def analyse_chef_environment_usage(
         # Analyze environments structure if provided
         environment_structure = {}
         if environments_path:
-            environments = _normalize_path(environments_path)
+            environments = _normalise_workspace_path(
+                environments_path, "Environments directory path"
+            )
             if environments.exists():  # NOSONAR
                 environment_structure = _analyse_environments_structure(environments)
 
@@ -3122,18 +3133,16 @@ def _sanitize_cookbook_paths_input(cookbook_paths: str) -> str:
         candidate = raw.strip()
         if not candidate:
             continue
-        # Normalize the path (resolves ., .., symlinks)
-
-        # prevents traversal attacks; file access is further contained by per-operation checks
+        # Normalize the path before checking its workspace boundary.
         normalised = _normalize_path(candidate)
 
-        # Validate it's an absolute path after normalization
         if not normalised.is_absolute():
             msg = f"Path must be absolute after normalization: {candidate}"
             raise ValueError(msg)
 
-        # Use the normalized absolute path (temp dirs, workspace dirs all allowed)
-        sanitized_paths.append(str(normalised))
+        _check_symlink_safety(normalised, Path(candidate))
+        safe_path = _ensure_within_base_path(normalised, _get_workspace_root())
+        sanitized_paths.append(str(safe_path))
     return ",".join(sanitized_paths)
 
 
@@ -3206,7 +3215,11 @@ def validate_chef_server_connection(
             server_url,
             client_name,
             organisation=organisation,
-            client_key_path=client_key_path or None,
+            client_key_path=(
+                str(_normalise_workspace_path(client_key_path, "Chef client key path"))
+                if client_key_path
+                else None
+            ),
             client_key=client_key or None,
         )
         result = "Success" if success else "Failed"
@@ -3251,7 +3264,11 @@ def get_chef_nodes(
             server_url=server_url or None,
             organisation=organisation or None,
             client_name=client_name or None,
-            client_key_path=client_key_path or None,
+            client_key_path=(
+                str(_normalise_workspace_path(client_key_path, "Chef client key path"))
+                if client_key_path
+                else None
+            ),
             client_key=client_key or None,
         )
         if not nodes:
@@ -3310,7 +3327,11 @@ def get_chef_roles(
             server_url=server_url or None,
             organisation=organisation or None,
             client_name=client_name or None,
-            client_key_path=client_key_path or None,
+            client_key_path=(
+                str(_normalise_workspace_path(client_key_path, "Chef client key path"))
+                if client_key_path
+                else None
+            ),
             client_key=client_key or None,
         )
         return json.dumps({"status": "success", "count": len(roles), "roles": roles})
@@ -3353,7 +3374,11 @@ def get_chef_environments(
             server_url=server_url or None,
             organisation=organisation or None,
             client_name=client_name or None,
-            client_key_path=client_key_path or None,
+            client_key_path=(
+                str(_normalise_workspace_path(client_key_path, "Chef client key path"))
+                if client_key_path
+                else None
+            ),
             client_key=client_key or None,
         )
         return json.dumps(
@@ -3402,7 +3427,11 @@ def get_chef_cookbooks(
             server_url=server_url or None,
             organisation=organisation or None,
             client_name=client_name or None,
-            client_key_path=client_key_path or None,
+            client_key_path=(
+                str(_normalise_workspace_path(client_key_path, "Chef client key path"))
+                if client_key_path
+                else None
+            ),
             client_key=client_key or None,
         )
         return json.dumps(
@@ -3451,7 +3480,11 @@ def get_chef_policies(
             server_url=server_url or None,
             organisation=organisation or None,
             client_name=client_name or None,
-            client_key_path=client_key_path or None,
+            client_key_path=(
+                str(_normalise_workspace_path(client_key_path, "Chef client key path"))
+                if client_key_path
+                else None
+            ),
             client_key=client_key or None,
         )
         return json.dumps(
@@ -3496,14 +3529,14 @@ def convert_template_with_ai(
 
     """
     try:
-        _validate_path_length(erb_path, "Template path")
+        safe_erb_path = _normalise_workspace_path(erb_path, "Template path")
         if use_ai_enhancement:
-            result = _convert_template_with_ai(erb_path, ai_service=None)
+            result = _convert_template_with_ai(str(safe_erb_path), ai_service=None)
         else:
             # Fall back to rule-based conversion
             from souschef.converters.template import convert_template_file
 
-            result = convert_template_file(erb_path)
+            result = convert_template_file(str(safe_erb_path))
             result["conversion_method"] = "rule-based"
         return json.dumps(result, indent=2)
     except Exception as e:
@@ -3649,8 +3682,15 @@ def analyse_chef_search_patterns(recipe_or_cookbook_path: str) -> str:
         Analysis of search patterns found.
 
     """
-    recipe_or_cookbook_path = str(_normalize_path(recipe_or_cookbook_path))
-    return _analyse_chef_search_patterns(recipe_or_cookbook_path)
+    try:
+        safe_path = _normalise_workspace_path(
+            recipe_or_cookbook_path, "Recipe or cookbook path"
+        )
+        return _analyse_chef_search_patterns(str(safe_path))
+    except Exception as e:
+        return format_error_with_context(
+            e, "analysing Chef search patterns", recipe_or_cookbook_path
+        )
 
 
 @mcp.tool()
@@ -3720,7 +3760,7 @@ def profile_parsing_operation(
     func = operation_map[operation]
 
     try:
-        file_path = str(_normalize_path(file_path))
+        file_path = str(_normalise_workspace_path(file_path, "File path"))
         if detailed:
             _, profile_result = detailed_profile_function(func, file_path)
             result = str(profile_result)
@@ -3857,7 +3897,9 @@ def generate_github_workflow_from_chef(
     from souschef.ci.github_actions import generate_github_workflow_from_chef_ci
 
     try:
-        cookbook_path = str(_normalize_path(cookbook_path))
+        cookbook_path = str(
+            _normalise_workspace_path(cookbook_path, _COOKBOOK_PATH_LABEL)
+        )
         enable_cache_bool = enable_cache.lower() in ("yes", "true", "1")
         enable_artifacts_bool = enable_artifacts.lower() in ("yes", "true", "1")
         result = generate_github_workflow_from_chef_ci(
@@ -3891,10 +3933,10 @@ def assign_github_copilot_to_issue(
     custom_instructions: str = "",
 ) -> str:
     """
-    Assign GitHub Copilot agent to work on an issue.
+    Add a SousChef tracking label to a GitHub issue.
 
-    The agent will analyse the issue, implement changes, and create a pull request.
-    You can pause, stop, or resume the agent using control commands.
+    This tool does not assign or start a GitHub Copilot agent. The base branch
+    and custom instructions are accepted for compatibility but are not acted on.
 
     Args:
         owner: Repository owner (username or organisation).
@@ -3904,7 +3946,7 @@ def assign_github_copilot_to_issue(
         custom_instructions: Optional additional guidance for the agent.
 
     Returns:
-        Status message with agent assignment confirmation and control commands.
+        Status message explaining the tracking-label change.
 
     """
     from souschef.github import assign_copilot_agent_to_issue
@@ -3919,7 +3961,9 @@ def assign_github_copilot_to_issue(
         )
     except Exception as e:
         return format_error_with_context(
-            e, "assigning Copilot agent", f"{owner}/{repo}#{issue_number}"
+            e,
+            "updating Copilot-agent tracking labels",
+            f"{owner}/{repo}#{issue_number}",
         )
 
 
@@ -3931,10 +3975,9 @@ def pause_github_copilot_agent(
     reason: str = "",
 ) -> str:
     """
-    Pause a running GitHub Copilot agent.
+    Update tracking labels and comment on a GitHub issue.
 
-    The agent will complete its current task before pausing. Use resume command
-    to continue work later.
+    This tool does not pause or contact a GitHub Copilot agent.
 
     Args:
         owner: Repository owner.
@@ -3943,7 +3986,7 @@ def pause_github_copilot_agent(
         reason: Optional reason for pausing (will be added to issue comments).
 
     Returns:
-        Status message confirming the pause request.
+        Status message explaining the tracking-label and comment changes.
 
     """
     from souschef.github import pause_copilot_agent
@@ -3957,7 +4000,7 @@ def pause_github_copilot_agent(
         )
     except Exception as e:
         return format_error_with_context(
-            e, "pausing Copilot agent", f"{owner}/{repo}#{issue_number}"
+            e, "updating Copilot-agent tracking state", f"{owner}/{repo}#{issue_number}"
         )
 
 
@@ -3969,10 +4012,9 @@ def stop_github_copilot_agent(
     reason: str = "",
 ) -> str:
     """
-    Stop and cancel a GitHub Copilot agent assignment.
+    Update tracking labels and comment on a GitHub issue.
 
-    The agent will stop working and will not create a pull request. This action
-    cannot be undone - use pause if you want to resume later.
+    This tool does not stop or contact a GitHub Copilot agent.
 
     Args:
         owner: Repository owner.
@@ -3981,7 +4023,7 @@ def stop_github_copilot_agent(
         reason: Optional reason for stopping (will be added to issue comments).
 
     Returns:
-        Status message confirming the agent has been stopped.
+        Status message explaining the tracking-label and comment changes.
 
     """
     from souschef.github import stop_copilot_agent
@@ -3995,7 +4037,7 @@ def stop_github_copilot_agent(
         )
     except Exception as e:
         return format_error_with_context(
-            e, "stopping Copilot agent", f"{owner}/{repo}#{issue_number}"
+            e, "updating Copilot-agent tracking state", f"{owner}/{repo}#{issue_number}"
         )
 
 
@@ -4007,10 +4049,9 @@ def resume_github_copilot_agent(
     additional_instructions: str = "",
 ) -> str:
     """
-    Resume a paused GitHub Copilot agent.
+    Update tracking labels and comment on a GitHub issue.
 
-    The agent will continue from where it left off. You can optionally provide
-    additional instructions to guide the resumed work.
+    This tool does not resume or contact a GitHub Copilot agent.
 
     Args:
         owner: Repository owner.
@@ -4019,7 +4060,7 @@ def resume_github_copilot_agent(
         additional_instructions: Optional new guidance for the agent.
 
     Returns:
-        Status message confirming the agent has resumed work.
+        Status message explaining the tracking-label and comment changes.
 
     """
     from souschef.github import resume_copilot_agent
@@ -4033,7 +4074,7 @@ def resume_github_copilot_agent(
         )
     except Exception as e:
         return format_error_with_context(
-            e, "resuming Copilot agent", f"{owner}/{repo}#{issue_number}"
+            e, "updating Copilot-agent tracking state", f"{owner}/{repo}#{issue_number}"
         )
 
 
@@ -4044,10 +4085,9 @@ def check_github_copilot_agent_status(
     issue_number: int,
 ) -> str:
     """
-    Check the current status of a GitHub Copilot agent assignment.
+    Read SousChef tracking labels and comments on a GitHub issue.
 
-    Shows whether the agent is active, paused, stopped, or not assigned,
-    along with recent activity and available control commands.
+    This tool does not report live status from a GitHub Copilot agent.
 
     Args:
         owner: Repository owner.
@@ -4055,7 +4095,7 @@ def check_github_copilot_agent_status(
         issue_number: Issue number to check.
 
     Returns:
-        Detailed status report with current state and available commands.
+        Detailed report of tracking labels and comments.
 
     """
     from souschef.github import check_copilot_agent_status
@@ -4068,7 +4108,7 @@ def check_github_copilot_agent_status(
         )
     except Exception as e:
         return format_error_with_context(
-            e, "checking Copilot agent status", f"{owner}/{repo}#{issue_number}"
+            e, "reading Copilot-agent tracking state", f"{owner}/{repo}#{issue_number}"
         )
 
 
@@ -4113,7 +4153,7 @@ def generate_ansible_repository(
     )
 
     try:
-        output_path = str(_normalize_path(output_path))
+        output_path = str(_normalise_workspace_path(output_path, "Output path"))
         init_git_bool = init_git.lower() in ("yes", "true", "1")
 
         # Determine repo type
@@ -4126,7 +4166,9 @@ def generate_ansible_repository(
                     }
                 )
 
-            cookbook_path = str(_normalize_path(cookbook_path))
+            cookbook_path = str(
+                _normalise_workspace_path(cookbook_path, _COOKBOOK_PATH_LABEL)
+            )
 
             # Validate cookbook path exists
             if not Path(cookbook_path).exists():  # NOSONAR
@@ -4189,9 +4231,13 @@ def parse_chef_migration_assessment(
         Dictionary containing assessment data with complexity, recommendations, etc.
 
     """
-    return _parse_chef_migration_assessment(
-        cookbook_paths, migration_scope, target_platform
-    )
+    try:
+        safe_paths = _sanitize_cookbook_paths_input(cookbook_paths)
+        return _parse_chef_migration_assessment(
+            safe_paths, migration_scope, target_platform
+        )
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
 
 
 @mcp.tool()
@@ -5289,7 +5335,9 @@ def assess_ansible_upgrade_readiness(environment_path: str) -> str:
     from souschef.ansible_upgrade import assess_ansible_environment
 
     try:
-        environment_path = str(_normalize_path(environment_path))
+        environment_path = str(
+            _normalise_workspace_path(environment_path, "Ansible environment path")
+        )
         result = assess_ansible_environment(environment_path)
         return json.dumps(result, indent=2, default=str)
     except Exception as e:
@@ -5318,7 +5366,9 @@ def plan_ansible_upgrade(environment_path: str, target_version: str) -> str:
     from souschef.parsers.ansible_inventory import detect_ansible_version
 
     try:
-        environment_path = str(_normalize_path(environment_path))
+        environment_path = str(
+            _normalise_workspace_path(environment_path, "Ansible environment path")
+        )
 
         # Detect current version - look for ansible in the environment first
         env_path = Path(environment_path)
@@ -5402,7 +5452,9 @@ def validate_ansible_collection_compatibility(
     from souschef.parsers.ansible_inventory import parse_requirements_yml
 
     try:
-        collections_file = str(_normalize_path(collections_file))
+        collections_file = str(
+            _normalise_workspace_path(collections_file, "Collections file path")
+        )
         collections = parse_requirements_yml(collections_file)
         result = validate_collection_compatibility(collections, target_version)
         return json.dumps(result, indent=2)
@@ -5430,7 +5482,9 @@ def generate_ansible_upgrade_test_plan(environment_path: str) -> str:
     from souschef.ansible_upgrade import generate_upgrade_testing_plan
 
     try:
-        environment_path = str(_normalize_path(environment_path))
+        environment_path = str(
+            _normalise_workspace_path(environment_path, "Ansible environment path")
+        )
         return generate_upgrade_testing_plan(environment_path)
     except Exception as e:
         return format_error_with_context(
@@ -5790,6 +5844,26 @@ def start_v2_migration(
     try:
         fips_enabled = fips_mode.lower() in ("yes", "true", "1")
 
+        chef_payload = json.loads(chef_server_config) if chef_server_config else {}
+        ingestion_payload = json.loads(ingestion_config) if ingestion_config else {}
+
+        if cookbook_path:
+            cookbook_path = str(
+                _normalise_workspace_path(cookbook_path, _COOKBOOK_PATH_LABEL)
+            )
+
+        client_key_path = chef_payload.get("client_key_path")
+        if client_key_path:
+            client_key_path = str(
+                _normalise_workspace_path(client_key_path, "Chef client key path")
+            )
+
+        offline_bundle_path = ingestion_payload.get("offline_bundle_path")
+        if offline_bundle_path:
+            offline_bundle_path = str(
+                _normalise_workspace_path(offline_bundle_path, "Offline bundle path")
+            )
+
         orchestrator = MigrationOrchestrator(
             chef_version=chef_version,
             target_platform=target_platform,
@@ -5797,14 +5871,11 @@ def start_v2_migration(
             fips_mode=fips_enabled,
         )
 
-        chef_payload = json.loads(chef_server_config) if chef_server_config else {}
-        ingestion_payload = json.loads(ingestion_config) if ingestion_config else {}
-
         chef_server = ChefServerOptions(
             server_url=chef_payload.get("server_url") or chef_payload.get("url"),
             organisation=chef_payload.get("organisation") or chef_payload.get("org"),
             client_name=chef_payload.get("client_name") or chef_payload.get("client"),
-            client_key_path=chef_payload.get("client_key_path"),
+            client_key_path=client_key_path,
             client_key=chef_payload.get("client_key"),
             query=chef_payload.get("query", "*"),
             node=chef_payload.get("node"),
@@ -5815,7 +5886,7 @@ def start_v2_migration(
             cookbook_version=ingestion_payload.get("cookbook_version"),
             dependency_depth=ingestion_payload.get("dependency_depth", "full"),
             use_cache=ingestion_payload.get("use_cache", True),
-            offline_bundle_path=ingestion_payload.get("offline_bundle_path"),
+            offline_bundle_path=offline_bundle_path,
         )
 
         result = orchestrator.migrate_cookbook(
@@ -5837,9 +5908,11 @@ def start_v2_migration(
             indent=2,
         )
     except Exception as e:
+        from souschef.core.chef_server import _redact_sensitive_data
+
         return json.dumps(
             {
-                "error": str(e),
+                "error": _redact_sensitive_data(str(e)),
                 "status": "failed",
                 "phase": "initialization",
             },
@@ -5850,135 +5923,99 @@ def start_v2_migration(
 @mcp.tool()
 def deploy_v2_migration(
     migration_id: str,
-    ansible_url: str,
-    ansible_username: str,
-    ansible_password: str,
+    ansible_url: str = "",
+    ansible_username: str = "",
+    ansible_password: str = "",
 ) -> str:
     """
-    Deploy v2.0 migration results to Ansible platform.
-
-    Creates inventory, project, playbooks, and job templates in Tower/AWX/AAP.
-    Supports rollback if deployment fails.
+    Report that v2.0 deployment is not implemented.
 
     Args:
         migration_id: ID of completed migration.
-        ansible_url: URL of Ansible platform.
-        ansible_username: Username for authentication.
-        ansible_password: Password for authentication.
+        ansible_url: Unused compatibility parameter.
+        ansible_username: Unused compatibility parameter.
+        ansible_password: Unused compatibility parameter.
 
     Returns:
-        JSON with deployment status and created resource IDs.
+        JSON stating that no deployment was performed.
 
     """
-    try:
-        # In real implementation, retrieve orchestrator state by migration_id
-        # For now, return status
-        return json.dumps(
-            {
-                "status": "deployment_ready",
-                "migration_id": migration_id,
-                "message": "Use deployment_status to check progress",
-            },
-            indent=2,
-        )
-
-    except Exception as e:  # pragma: no cover
-        return json.dumps(
-            {"error": str(e), "status": "failed_"},
-            indent=2,
-        )
+    return json.dumps(
+        {
+            "status": "not_implemented",
+            "migration_id": migration_id,
+            "message": "No AWX/AAP deployment was performed; credentials were not used.",
+        },
+        indent=2,
+    )
 
 
 @mcp.tool()
 def validate_v2_playbooks(playbook_paths: str, target_ansible_version: str) -> str:
     """
-    Validate generated Ansible playbooks for target Ansible version.
-
-    Checks syntax and compatibility with target Ansible core version.
+    Report that v2.0 playbook validation is not implemented.
 
     Args:
         playbook_paths: Comma-separated list of playbook paths.
         target_ansible_version: Target Ansible version (2.9, 2.12, 2.15, 2.16).
 
     Returns:
-        JSON with validation results per playbook.
+        JSON stating that no playbooks were validated.
 
     """
-    from typing import Any
-
-    try:
-        results: dict[str, Any] = {
-            "playbooks_validated": len(playbook_paths.split(",")),
+    return json.dumps(
+        {
+            "status": "not_implemented",
+            "validation_performed": False,
+            "playbooks_validated": 0,
             "target_ansible_version": target_ansible_version,
-            "all_valid": True,
-            "playbooks": [],
-        }
-
-        for path in playbook_paths.split(","):
-            playbooks_list = results["playbooks"]
-            if isinstance(playbooks_list, list):
-                playbooks_list.append(
-                    {"path": path.strip(), "valid": True, "errors": []},
-                )
-
-        return json.dumps(results, indent=2)
-
-    except Exception as e:  # pragma: no cover
-        return json.dumps(
-            {"error": str(e), "status": "validation_failed"},
-            indent=2,
-        )
+            "message": "No playbooks were inspected or validated.",
+        },
+        indent=2,
+    )
 
 
 @mcp.tool()
 def rollback_v2_migration(
-    ansible_url: str,
-    ansible_username: str,
-    ansible_password: str,
+    ansible_url: str = "",
+    ansible_username: str = "",
+    ansible_password: str = "",
     inventory_id: int = 0,
     project_id: int = 0,
     job_template_id: int = 0,
 ) -> str:
     """
-    Rollback v2.0 migration by deleting created infrastructure.
-
-    Safely removes inventory, project, and job template from Ansible platform.
+    Report that v2.0 rollback is not implemented.
 
     Args:
-        ansible_url: URL of Ansible platform.
-        ansible_username: Username for authentication.
-        ansible_password: Password for authentication.
-        inventory_id: ID of created inventory (0 to skip).
-        project_id: ID of created project (0 to skip).
-        job_template_id: ID of created job template (0 to skip).
+        ansible_url: Unused compatibility parameter.
+        ansible_username: Unused compatibility parameter.
+        ansible_password: Unused compatibility parameter.
+        inventory_id: ID of an inventory requested for rollback.
+        project_id: ID of a project requested for rollback.
+        job_template_id: ID of a job template requested for rollback.
 
     Returns:
-        JSON with rollback status.
+        JSON stating that no resources were deleted.
 
     """
-    try:
-        deleted = []
-        if job_template_id > 0:
-            deleted.append(f"job_template:{job_template_id}")
-        if inventory_id > 0:
-            deleted.append(f"inventory:{inventory_id}")
-        if project_id > 0:
-            deleted.append(f"project:{project_id}")
+    requested_resources = []
+    if job_template_id > 0:
+        requested_resources.append(f"job_template:{job_template_id}")
+    if inventory_id > 0:
+        requested_resources.append(f"inventory:{inventory_id}")
+    if project_id > 0:
+        requested_resources.append(f"project:{project_id}")
 
-        return json.dumps(
-            {
-                "status": "rollback_complete",
-                "deleted_resources": deleted,
-                "message": f"Deleted {len(deleted)} resources",
-            },
-            indent=2,
-        )
-
-    except Exception as e:  # pragma: no cover
-        return json.dumps(
-            {"error": str(e), "status": "rollback_failed"},
-            indent=2,
-        )
+    return json.dumps(
+        {
+            "status": "not_implemented",
+            "rollback_performed": False,
+            "requested_resources": requested_resources,
+            "message": "No AWX/AAP resources were deleted; credentials were not used.",
+        },
+        indent=2,
+    )
 
 
 @mcp.tool()
@@ -6026,8 +6063,10 @@ def query_chef_server(
         )
 
     except Exception as e:
+        from souschef.core.chef_server import _redact_sensitive_data
+
         return json.dumps(
-            {"error": str(e), "status": "failed"},
+            {"error": _redact_sensitive_data(str(e)), "status": "failed"},
             indent=2,
         )
 
@@ -6170,16 +6209,13 @@ def generate_handler_routing_config(
 
     def _scan_directory_for_patterns(
         directory: Path,
+        base_path: Path,
     ) -> list[dict[str, Any]]:
         """Scan directory for handler patterns in .rb files."""
         patterns: list[dict[str, Any]] = []
-        if directory.exists():
-            for rb_file in directory.glob("*.rb"):
-                try:
-                    content = rb_file.read_text(encoding="utf-8")
-                    patterns.extend(detect_handler_patterns(content))
-                except Exception:  # noqa: S110  # pragma: no cover
-                    pass  # Skip files with parsing errors
+        for rb_file in safe_glob(directory, "*.rb", base_path):
+            content = safe_read_text(rb_file, base_path, encoding="utf-8")
+            patterns.extend(detect_handler_patterns(content))
         return patterns
 
     try:
@@ -6194,8 +6230,8 @@ def generate_handler_routing_config(
         libraries_dir = safe_path / "libraries"
         recipes_dir = safe_path / "recipes"
 
-        all_patterns.extend(_scan_directory_for_patterns(libraries_dir))
-        all_patterns.extend(_scan_directory_for_patterns(recipes_dir))
+        all_patterns.extend(_scan_directory_for_patterns(libraries_dir, safe_path))
+        all_patterns.extend(_scan_directory_for_patterns(recipes_dir, safe_path))
 
         handlers_found = sum(
             1
@@ -6267,10 +6303,10 @@ def parse_salt_sls(sls_path: str) -> str:
 
     """
     try:
-        _validate_path_length(sls_path, "SLS path")
-    except ValueError as e:
-        return format_error_with_context(e, "validating SLS path", sls_path)
-    return _parse_salt_sls(sls_path)
+        safe_path = str(_normalise_workspace_path(sls_path, "SLS path"))
+        return _parse_salt_sls(safe_path)
+    except Exception as e:
+        return format_error_with_context(e, "parsing Salt SLS file", sls_path)
 
 
 @mcp.tool()
@@ -6289,10 +6325,10 @@ def parse_salt_pillar(pillar_path: str) -> str:
 
     """
     try:
-        _validate_path_length(pillar_path, "Pillar path")
-    except ValueError as e:
-        return format_error_with_context(e, "validating pillar path", pillar_path)
-    return _parse_salt_pillar(pillar_path)
+        safe_path = str(_normalise_workspace_path(pillar_path, "Pillar path"))
+        return _parse_salt_pillar(safe_path)
+    except Exception as e:
+        return format_error_with_context(e, "parsing Salt pillar", pillar_path)
 
 
 @mcp.tool()
@@ -6311,10 +6347,10 @@ def parse_salt_top(top_path: str) -> str:
 
     """
     try:
-        _validate_path_length(top_path, "Top file path")
-    except ValueError as e:
-        return format_error_with_context(e, "validating top file path", top_path)
-    return _parse_salt_top(top_path)
+        safe_path = str(_normalise_workspace_path(top_path, "Top file path"))
+        return _parse_salt_top(safe_path)
+    except Exception as e:
+        return format_error_with_context(e, "parsing Salt top file", top_path)
 
 
 @mcp.tool()
@@ -6333,10 +6369,10 @@ def parse_salt_directory(salt_dir: str) -> str:
 
     """
     try:
-        _validate_path_length(salt_dir, _SALT_DIRECTORY_PATH_LABEL)
-    except ValueError as e:
-        return format_error_with_context(e, _VALIDATING_SALT_DIRECTORY_PATH, salt_dir)
-    return _parse_salt_directory(salt_dir)
+        safe_dir = str(_normalise_workspace_path(salt_dir, _SALT_DIRECTORY_PATH_LABEL))
+        return _parse_salt_directory(safe_dir)
+    except Exception as e:
+        return format_error_with_context(e, "parsing Salt directory", salt_dir)
 
 
 @mcp.tool()
@@ -6366,10 +6402,43 @@ def convert_salt_to_ansible(sls_path: str, playbook_name: str = "") -> str:
 
     """
     try:
-        _validate_path_length(sls_path, "SLS path")
+        safe_path = str(_normalise_workspace_path(sls_path, "SLS path"))
+        return _convert_salt_sls_to_ansible(safe_path, playbook_name)
+    except Exception as e:
+        return format_error_with_context(e, "converting Salt SLS file", sls_path)
+
+
+def _validate_salt_master_url(master_url: str) -> str:
+    """Validate a Salt API endpoint before sending credentials or requests."""
+    _validate_path_length(master_url, "Salt Master URL")
+    url_pattern = re.compile(r"^https://[a-zA-Z0-9._-]+(:\d{1,5})?(/.*)?$")
+    if not url_pattern.match(master_url):
+        raise ValueError(
+            "Invalid master_url format. Must be an https:// URL with a hostname."
+        )
+
+    from souschef.core.url_validation import validate_user_provided_url
+
+    try:
+        return validate_user_provided_url(master_url)
     except ValueError as e:
-        return format_error_with_context(e, "validating SLS path", sls_path)
-    return _convert_salt_sls_to_ansible(sls_path, playbook_name)
+        raise ValueError(f"Invalid master_url format: {e}") from e
+
+
+class _SaltNoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Reject redirects for Salt requests carrying authentication data."""
+
+    def redirect_request(
+        self,
+        req: urllib.request.Request,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> None:
+        """Do not forward Salt credentials to a redirect target."""
+        return None
 
 
 @mcp.tool()
@@ -6404,19 +6473,9 @@ def query_salt_master(
     import urllib.request
 
     try:
-        _validate_path_length(master_url, "Salt Master URL")
+        master_url = _validate_salt_master_url(master_url)
     except ValueError as e:
         return json.dumps({"error": str(e), "status": "error"})
-
-    # Validate URL scheme to prevent SSRF - only allow https:// and http://
-    _url_pattern = re.compile(r"^https?://[a-zA-Z0-9._-]+(:\d{1,5})?(/.*)?$")
-    if not _url_pattern.match(master_url):
-        return json.dumps(
-            {
-                "error": "Invalid master_url format. Must be an http:// or https:// URL with a hostname.",
-                "status": "error",
-            }
-        )
 
     valid_query_types = {"top", "states", "pillar"}
     if query_type not in valid_query_types:
@@ -6451,7 +6510,12 @@ def query_salt_master(
             },
         )
 
-        with urllib.request.urlopen(login_req, context=ssl_context, timeout=30) as resp:  # noqa: S310
+        opener = urllib.request.build_opener(
+            urllib.request.HTTPSHandler(context=ssl_context),
+            _SaltNoRedirectHandler(),
+        )
+
+        with opener.open(login_req, timeout=30) as resp:  # noqa: S310
             import json as _json
 
             login_result = _json.loads(resp.read().decode("utf-8"))
@@ -6492,7 +6556,7 @@ def query_salt_master(
             },
         )
 
-        with urllib.request.urlopen(query_req, context=ssl_context, timeout=60) as resp:  # noqa: S310
+        with opener.open(query_req, timeout=60) as resp:  # noqa: S310
             query_result = _json.loads(resp.read().decode("utf-8"))
 
         return json.dumps(
@@ -6536,10 +6600,12 @@ def assess_salt_migration_complexity(salt_dir: str) -> str:
 
     """
     try:
-        _validate_path_length(salt_dir, _SALT_DIRECTORY_PATH_LABEL)
-    except ValueError as e:
-        return format_error_with_context(e, _VALIDATING_SALT_DIRECTORY_PATH, salt_dir)
-    return _assess_salt_complexity(salt_dir)
+        safe_dir = str(_normalise_workspace_path(salt_dir, _SALT_DIRECTORY_PATH_LABEL))
+        return _assess_salt_complexity(safe_dir)
+    except Exception as e:
+        return format_error_with_context(
+            e, "assessing Salt migration complexity", salt_dir
+        )
 
 
 @mcp.tool()
@@ -6566,9 +6632,9 @@ def plan_salt_migration(
 
     """
     try:
-        _validate_path_length(salt_dir, _SALT_DIRECTORY_PATH_LABEL)
-    except ValueError as e:
-        return format_error_with_context(e, _VALIDATING_SALT_DIRECTORY_PATH, salt_dir)
+        salt_dir = str(_normalise_workspace_path(salt_dir, _SALT_DIRECTORY_PATH_LABEL))
+    except Exception as e:
+        return format_error_with_context(e, "planning Salt migration", salt_dir)
     from souschef.orchestrators.salt_planning import build_salt_migration_plan
 
     return build_salt_migration_plan(
@@ -6753,9 +6819,11 @@ def generate_salt_migration_report(
 
     """
     try:
-        _validate_path_length(salt_dir, _SALT_DIRECTORY_PATH_LABEL)
-    except ValueError as e:
-        return format_error_with_context(e, _VALIDATING_SALT_DIRECTORY_PATH, salt_dir)
+        salt_dir = str(_normalise_workspace_path(salt_dir, _SALT_DIRECTORY_PATH_LABEL))
+    except Exception as e:
+        return format_error_with_context(
+            e, "generating Salt migration report", salt_dir
+        )
 
     import json as _json
 
@@ -6844,9 +6912,9 @@ def generate_salt_inventory(top_path: str) -> str:
 
     """
     try:
-        _validate_path_length(top_path, "top.sls path")
-    except ValueError as e:
-        return format_error_with_context(e, "validating top.sls path", top_path)
+        top_path = str(_normalise_workspace_path(top_path, "top.sls path"))
+    except Exception as e:
+        return format_error_with_context(e, "generating Salt inventory", top_path)
     from souschef.orchestrators.salt_planning import build_salt_inventory_payload
 
     return build_salt_inventory_payload(
@@ -6874,10 +6942,10 @@ def convert_salt_pillar_to_vars(pillar_path: str, output_format: str = "yaml") -
 
     """
     try:
-        _validate_path_length(pillar_path, "Pillar path")
-    except ValueError as e:
-        return format_error_with_context(e, "validating pillar path", pillar_path)
-    return _convert_salt_pillar_to_vars(pillar_path, output_format)
+        safe_path = str(_normalise_workspace_path(pillar_path, "Pillar path"))
+        return _convert_salt_pillar_to_vars(safe_path, output_format)
+    except Exception as e:
+        return format_error_with_context(e, "converting Salt pillar", pillar_path)
 
 
 @mcp.tool()
@@ -6899,11 +6967,15 @@ def convert_salt_directory_to_ansible(salt_dir: str, output_dir: str) -> str:
 
     """
     try:
-        _validate_path_length(salt_dir, _SALT_DIRECTORY_PATH_LABEL)
-        _validate_path_length(output_dir, "Output directory path")
-    except ValueError as e:
-        return format_error_with_context(e, "validating paths", salt_dir)
-    return _convert_salt_directory_to_roles(salt_dir, output_dir)
+        safe_salt_dir = str(
+            _normalise_workspace_path(salt_dir, _SALT_DIRECTORY_PATH_LABEL)
+        )
+        safe_output_dir = str(
+            _normalise_workspace_path(output_dir, "Output directory path")
+        )
+        return _convert_salt_directory_to_roles(safe_salt_dir, safe_output_dir)
+    except Exception as e:
+        return format_error_with_context(e, "converting Salt directory", salt_dir)
 
 
 # ==================== End Salt Migration Tools ====================
@@ -6936,7 +7008,13 @@ def parse_powershell(script_path: str) -> str:
         - ``metrics``: summary counts per action category.
 
     """
-    return _parse_powershell_script(script_path)
+    try:
+        safe_path = str(
+            _normalise_workspace_path(script_path, "PowerShell script path")
+        )
+        return _parse_powershell_script(safe_path)
+    except Exception as e:
+        return format_error_with_context(e, "parsing PowerShell script", script_path)
 
 
 @mcp.tool()
@@ -6970,7 +7048,13 @@ def convert_powershell(
         - ``source``: absolute path of the input file.
 
     """
-    return _convert_powershell_to_ansible(script_path, playbook_name, hosts)
+    try:
+        safe_path = str(
+            _normalise_workspace_path(script_path, "PowerShell script path")
+        )
+        return _convert_powershell_to_ansible(safe_path, playbook_name, hosts)
+    except Exception as e:
+        return format_error_with_context(e, "converting PowerShell script", script_path)
 
 
 @mcp.tool()
@@ -7031,7 +7115,15 @@ def generate_windows_requirements(
     if script_path.strip():
         import json as _json
 
-        raw = _parse_powershell_script(script_path)
+        try:
+            safe_path = str(
+                _normalise_workspace_path(script_path, "PowerShell script path")
+            )
+        except Exception as e:
+            return format_error_with_context(
+                e, "generating Windows requirements", script_path
+            )
+        raw = _parse_powershell_script(safe_path)
         if not raw.startswith("Error"):
             parsed_ir = _json.loads(raw)
     return _generate_ansible_requirements(parsed_ir)
@@ -7066,7 +7158,21 @@ def generate_powershell_role(
     """
     import json as _json
 
-    raw = _parse_powershell_script(script_path)
+    try:
+        safe_path = str(
+            _normalise_workspace_path(script_path, "PowerShell script path")
+        )
+    except (OSError, ValueError) as e:
+        return _json.dumps(
+            {
+                "status": "error",
+                "error": format_error_with_context(
+                    e, "generating PowerShell role", script_path
+                ),
+            },
+            indent=2,
+        )
+    raw = _parse_powershell_script(safe_path)
     if raw.startswith("Error"):
         return _json.dumps({"status": "error", "error": raw}, indent=2)
 
@@ -7118,7 +7224,15 @@ def generate_powershell_job_template(
     """
     import json as _json
 
-    raw = _parse_powershell_script(script_path)
+    try:
+        safe_path = str(
+            _normalise_workspace_path(script_path, "PowerShell script path")
+        )
+    except Exception as e:
+        return format_error_with_context(
+            e, "generating PowerShell job template", script_path
+        )
+    raw = _parse_powershell_script(safe_path)
     if raw.startswith("Error"):
         return raw
 
@@ -7163,7 +7277,21 @@ def analyze_powershell_fidelity(
     """
     import json as _json
 
-    raw = _parse_powershell_script(script_path)
+    try:
+        safe_path = str(
+            _normalise_workspace_path(script_path, "PowerShell script path")
+        )
+    except (OSError, ValueError) as e:
+        return _json.dumps(
+            {
+                "status": "error",
+                "error": format_error_with_context(
+                    e, "analysing PowerShell migration fidelity", script_path
+                ),
+            },
+            indent=2,
+        )
+    raw = _parse_powershell_script(safe_path)
     if raw.startswith("Error"):
         return _json.dumps({"status": "error", "error": raw}, indent=2)
 
@@ -7196,7 +7324,11 @@ def parse_bash_script(script_path: str) -> str:
         idempotency hints.
 
     """
-    return _parse_bash_script(script_path)
+    try:
+        safe_path = str(_normalise_workspace_path(script_path, "Bash script path"))
+        return _parse_bash_script(safe_path)
+    except Exception as e:
+        return format_error_with_context(e, "parsing Bash script", script_path)
 
 
 @mcp.tool()
@@ -7220,7 +7352,12 @@ def convert_bash_to_ansible(script_path: str) -> str:
         and ``idempotency_report`` keys.
 
     """
-    return _convert_bash_to_ansible(script_path)
+    try:
+        safe_path = str(_normalise_workspace_path(script_path, "Bash script path"))
+        return _convert_bash_to_ansible(safe_path)
+    except (OSError, ValueError) as e:
+        message = format_error_with_context(e, "converting Bash script", script_path)
+        return json.dumps({"status": "error", "error": message})
 
 
 @mcp.tool()
@@ -7245,7 +7382,19 @@ def generate_ansible_role_from_bash(
         keys.  Returns a JSON error object on failure.
 
     """
-    return _generate_ansible_role_from_bash_file(script_path, role_name)
+    try:
+        safe_path = str(_normalise_workspace_path(script_path, "Bash script path"))
+    except (OSError, ValueError) as e:
+        return json.dumps(
+            {
+                "status": "error",
+                "error": format_error_with_context(
+                    e, "generating Ansible role from Bash", script_path
+                ),
+            },
+            indent=2,
+        )
+    return _generate_ansible_role_from_bash_file(safe_path, role_name)
 
 
 # ==================== End V2.2 Bash Script Migration Tools ====================
@@ -7264,11 +7413,14 @@ def list_puppet_server_nodes(
 ) -> str:
     """List Puppet nodes available from a certificate-authenticated connector."""
     try:
+        from souschef.core.url_validation import validate_user_provided_url
+
+        safe_server_url = validate_user_provided_url(server_url)
         safe_cert = str(_normalise_workspace_path(cert_path, "Certificate path"))
         safe_key = str(_normalise_workspace_path(key_path, "Key path"))
         safe_ca = str(_normalise_workspace_path(ca_path, "CA path")) if ca_path else ""
         result = _list_puppet_server_nodes(
-            server_url=server_url,
+            server_url=safe_server_url,
             cert_path=safe_cert,
             key_path=safe_key,
             environment=environment,
@@ -7290,11 +7442,14 @@ def import_puppet_catalog_to_ir(
 ) -> str:
     """Import a compiled Puppet catalog for a selected node into the IR."""
     try:
+        from souschef.core.url_validation import validate_user_provided_url
+
+        safe_server_url = validate_user_provided_url(server_url)
         safe_cert = str(_normalise_workspace_path(cert_path, "Certificate path"))
         safe_key = str(_normalise_workspace_path(key_path, "Key path"))
         safe_ca = str(_normalise_workspace_path(ca_path, "CA path")) if ca_path else ""
         result = _import_puppet_catalog_to_ir(
-            server_url=server_url,
+            server_url=safe_server_url,
             cert_path=safe_cert,
             key_path=safe_key,
             node_name=node_name,
@@ -7323,7 +7478,13 @@ def parse_puppet_manifest(manifest_path: str) -> str:
         and unsupported constructs with source locations and migration notes.
 
     """
-    return _parse_puppet_manifest(manifest_path)
+    try:
+        safe_path = str(
+            _normalise_workspace_path(manifest_path, "Puppet manifest path")
+        )
+        return _parse_puppet_manifest(safe_path)
+    except Exception as e:
+        return format_error_with_context(e, "parsing Puppet manifest", manifest_path)
 
 
 @mcp.tool()
@@ -7343,7 +7504,11 @@ def parse_puppet_module(module_path: str) -> str:
         and a summary suitable for migration planning.
 
     """
-    return _parse_puppet_module(module_path)
+    try:
+        safe_path = str(_normalise_workspace_path(module_path, "Puppet module path"))
+        return _parse_puppet_module(safe_path)
+    except Exception as e:
+        return format_error_with_context(e, "parsing Puppet module", module_path)
 
 
 @mcp.tool()
@@ -7374,7 +7539,13 @@ def convert_puppet_manifest_to_ansible(manifest_path: str) -> str:
         Ansible playbook in YAML format as a string.
 
     """
-    return _convert_puppet_manifest_to_ansible(manifest_path)
+    try:
+        safe_path = str(
+            _normalise_workspace_path(manifest_path, "Puppet manifest path")
+        )
+        return _convert_puppet_manifest_to_ansible(safe_path)
+    except Exception as e:
+        return format_error_with_context(e, "converting Puppet manifest", manifest_path)
 
 
 @mcp.tool()
@@ -7397,11 +7568,15 @@ def convert_puppet_module_to_ansible(
         Combined Ansible playbook in YAML format as a string.
 
     """
-    if os_family:
-        return _convert_puppet_module_to_ansible(module_path, environment, os_family)
-    if environment:
-        return _convert_puppet_module_to_ansible(module_path, environment)
-    return _convert_puppet_module_to_ansible(module_path)
+    try:
+        safe_path = str(_normalise_workspace_path(module_path, "Puppet module path"))
+        if os_family:
+            return _convert_puppet_module_to_ansible(safe_path, environment, os_family)
+        if environment:
+            return _convert_puppet_module_to_ansible(safe_path, environment)
+        return _convert_puppet_module_to_ansible(safe_path)
+    except Exception as e:
+        return format_error_with_context(e, "converting Puppet module", module_path)
 
 
 @mcp.tool()
@@ -7495,16 +7670,24 @@ def convert_puppet_manifest_to_ansible_with_ai(
         Ansible playbook YAML string, or an error message if conversion fails.
 
     """
-    return _convert_puppet_manifest_ai(
-        manifest_path,
-        ai_provider=ai_provider,
-        api_key=api_key,
-        model=model,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        project_id=project_id,
-        base_url=base_url,
-    )
+    try:
+        safe_path = str(
+            _normalise_workspace_path(manifest_path, "Puppet manifest path")
+        )
+        return _convert_puppet_manifest_ai(
+            safe_path,
+            ai_provider=ai_provider,
+            api_key=api_key,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            project_id=project_id,
+            base_url=base_url,
+        )
+    except Exception as e:
+        return format_error_with_context(
+            e, "converting Puppet manifest with AI", manifest_path
+        )
 
 
 @mcp.tool()
@@ -7540,16 +7723,22 @@ def convert_puppet_module_to_ansible_with_ai(
         Ansible playbook YAML string, or an error message if conversion fails.
 
     """
-    return _convert_puppet_module_ai(
-        module_path,
-        ai_provider=ai_provider,
-        api_key=api_key,
-        model=model,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        project_id=project_id,
-        base_url=base_url,
-    )
+    try:
+        safe_path = str(_normalise_workspace_path(module_path, "Puppet module path"))
+        return _convert_puppet_module_ai(
+            safe_path,
+            ai_provider=ai_provider,
+            api_key=api_key,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            project_id=project_id,
+            base_url=base_url,
+        )
+    except Exception as e:
+        return format_error_with_context(
+            e, "converting Puppet module with AI", module_path
+        )
 
 
 # ==================== End Puppet Migration Tools ====================

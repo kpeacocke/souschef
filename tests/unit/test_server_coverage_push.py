@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from unittest.mock import patch
 
 from souschef import server
@@ -17,7 +18,23 @@ def test_generate_ansible_role_from_bash_wrapper_calls_internal() -> None:
         result = server.generate_ansible_role_from_bash("script.sh", "role")
 
     assert result == '{"status":"success"}'
-    mock_internal.assert_called_once_with("script.sh", "role")
+    mock_internal.assert_called_once_with(str(Path.cwd() / "script.sh"), "role")
+
+
+def test_generate_ansible_role_from_bash_returns_json_for_invalid_path() -> None:
+    """Keep Bash role path-validation failures in the documented JSON shape."""
+    result = json.loads(server.generate_ansible_role_from_bash("\x00"))
+
+    assert result["status"] == "error"
+    assert "null bytes" in result["error"]
+
+
+def test_convert_bash_to_ansible_returns_json_for_invalid_path() -> None:
+    """Keep Bash conversion failures in the documented JSON response shape."""
+    result = json.loads(server.convert_bash_to_ansible("\x00"))
+
+    assert result["status"] == "error"
+    assert "null bytes" in result["error"]
 
 
 def test_server_wrappers_handle_permission_error() -> None:
@@ -63,7 +80,8 @@ def test_assess_salt_migration_complexity_validates_path_length_error() -> None:
         "souschef.server._validate_path_length", side_effect=ValueError("too long")
     ):
         result = server.assess_salt_migration_complexity("x" * 5000)
-    assert "Error during validating Salt directory path" in result
+    assert "assessing Salt migration complexity" in result
+    assert "too long" in result
 
 
 def test_assess_salt_migration_complexity_success_path() -> None:
@@ -93,7 +111,8 @@ def test_plan_salt_migration_path_validation_error() -> None:
         "souschef.server._validate_path_length", side_effect=ValueError("too long")
     ):
         result = server.plan_salt_migration("x" * 5000)
-    assert "Error during validating Salt directory path" in result
+    assert "planning Salt migration" in result
+    assert "too long" in result
 
 
 def test_plan_salt_migration_error_payload() -> None:
@@ -240,7 +259,8 @@ def test_generate_salt_migration_report_path_validation_error() -> None:
         "souschef.server._validate_path_length", side_effect=ValueError("too long")
     ):
         result = server.generate_salt_migration_report("x" * 5000)
-    assert "Error during validating Salt directory path" in result
+    assert "generating Salt migration report" in result
+    assert "too long" in result
 
 
 def test_get_module_coverage_maps_supported_and_unsupported() -> None:
@@ -278,7 +298,8 @@ def test_generate_salt_inventory_path_validation_error() -> None:
         "souschef.server._validate_path_length", side_effect=ValueError("too long")
     ):
         result = server.generate_salt_inventory("x" * 5000)
-    assert "Error during validating top.sls path" in result
+    assert "generating Salt inventory" in result
+    assert "too long" in result
 
 
 def test_generate_salt_inventory_success_extracts_groups_hosts() -> None:
@@ -306,8 +327,10 @@ def test_convert_salt_wrapper_path_validation_errors() -> None:
         pillar_result = server.convert_salt_pillar_to_vars("x" * 5000)
         dir_result = server.convert_salt_directory_to_ansible("x" * 5000, "out")
 
-    assert pillar_result.startswith("Error during validating pillar path")
-    assert dir_result.startswith("Error during validating paths")
+    assert "converting Salt pillar" in pillar_result
+    assert "converting Salt directory" in dir_result
+    assert "too long" in pillar_result
+    assert "too long" in dir_result
 
 
 def test_convert_salt_wrapper_success_delegation() -> None:

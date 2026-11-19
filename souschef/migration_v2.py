@@ -42,7 +42,11 @@ from souschef.core.chef_server import (
     build_chef_server_client,
     get_chef_nodes,
 )
-from souschef.core.path_utils import _get_workspace_root, _safe_join
+from souschef.core.path_utils import (
+    _ensure_within_base_path,
+    _get_workspace_root,
+    _safe_join,
+)
 from souschef.deployment import _parse_chef_runlist
 from souschef.ingestion import CookbookSpec, fetch_cookbooks_from_chef_server
 from souschef.migration_simulation import (
@@ -1407,7 +1411,10 @@ class MigrationOrchestrator:
 
                 try:
                     # Convert ERB to Jinja2
-                    conversion_result = convert_template_file(str(template_file))
+                    safe_template_file = _ensure_within_base_path(
+                        template_file, Path(cookbook_path)
+                    )
+                    conversion_result = convert_template_file(str(safe_template_file))
 
                     if conversion_result.get("success"):
                         jinja2_filename = Path(conversion_result["jinja2_file"]).name

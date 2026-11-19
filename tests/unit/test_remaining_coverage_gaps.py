@@ -942,23 +942,35 @@ class TestGithubAgentControl:
         """RuntimeError from _add_comment_to_issue is caught and returned (lines 217-218)."""
         from souschef.github.agent_control import stop_copilot_agent
 
-        with patch(
-            "souschef.github.agent_control._add_comment_to_issue",
-            side_effect=RuntimeError("API error"),
+        with (
+            patch("souschef.github.agent_control._add_label_to_issue"),
+            patch("souschef.github.agent_control._remove_label_from_issue"),
+            patch(
+                "souschef.github.agent_control._add_comment_to_issue",
+                side_effect=RuntimeError("API error"),
+            ),
         ):
             result = stop_copilot_agent("owner", "repo", 1, reason="test")
-        assert "Error stopping" in result
+        assert "Error updating Copilot-agent tracking state" in result
 
     def test_resume_copilot_agent_runtime_error(self) -> None:
         """RuntimeError from resume is caught and returned (lines 300-301)."""
         from souschef.github.agent_control import resume_copilot_agent
 
-        with patch(
-            "souschef.github.agent_control._add_comment_to_issue",
-            side_effect=RuntimeError("API error"),
+        with (
+            patch(
+                "souschef.github.agent_control._check_agent_labels",
+                return_value="paused",
+            ),
+            patch("souschef.github.agent_control._remove_label_from_issue"),
+            patch("souschef.github.agent_control._add_label_to_issue"),
+            patch(
+                "souschef.github.agent_control._add_comment_to_issue",
+                side_effect=RuntimeError("API error"),
+            ),
         ):
             result = resume_copilot_agent("owner", "repo", 1)
-        assert "Error resuming" in result
+        assert "Error updating Copilot-agent tracking state" in result
 
 
 # ---------------------------------------------------------------------------

@@ -64,7 +64,7 @@ class TestGitHubRequest:
         mock_response.json.return_value = {"data": "value"}
         mock_request.return_value = mock_response
 
-        response = _github_request("GET", "/repos/owner/repo")
+        response = _github_request("GET", "/repos/owner/repo/issues/1")
 
         assert response is not None
         assert response.status_code == 200
@@ -81,7 +81,9 @@ class TestGitHubRequest:
         mock_response.status_code = 200
         mock_request.return_value = mock_response
 
-        _github_request("GET", "/repos/owner/repo", params={"per_page": "10"})
+        _github_request(
+            "GET", "/repos/owner/repo/issues/1/comments", params={"per_page": "10"}
+        )
 
         call_kwargs = mock_request.call_args.kwargs
         assert call_kwargs["params"] == {"per_page": "10"}
@@ -94,7 +96,11 @@ class TestGitHubRequest:
         mock_response.status_code = 201
         mock_request.return_value = mock_response
 
-        _github_request("POST", "/repos/owner/repo/labels", json_data={"name": "bug"})
+        _github_request(
+            "POST",
+            "/repos/owner/repo/issues/1/comments",
+            json_data={"name": "bug"},
+        )
 
         call_kwargs = mock_request.call_args.kwargs
         assert call_kwargs["json"] == {"name": "bug"}
@@ -107,7 +113,7 @@ class TestGitHubRequest:
         mock_response.status_code = 200
         mock_request.return_value = mock_response
 
-        _github_request("GET", "/repos/owner/repo", timeout=30.0)
+        _github_request("GET", "/repos/owner/repo/issues/1", timeout=30.0)
 
         call_kwargs = mock_request.call_args.kwargs
         assert call_kwargs["timeout"] == pytest.approx(30.0)
@@ -120,7 +126,9 @@ class TestGitHubRequest:
         mock_response.status_code = 404
         mock_request.return_value = mock_response
 
-        response = _github_request("GET", "/repos/owner /repo", allow_not_found=True)
+        response = _github_request(
+            "GET", "/repos/owner/repo/issues/1/labels", allow_not_found=True
+        )
 
         assert response is None
 
@@ -134,7 +142,7 @@ class TestGitHubRequest:
         mock_request.return_value = mock_response
 
         with pytest.raises(RuntimeError, match="GitHub API error 404"):
-            _github_request("GET", "/repos/owner/repo", allow_not_found=False)
+            _github_request("GET", "/repos/owner/repo/issues/1", allow_not_found=False)
 
     @patch("souschef.github.agent_control.requests.request")
     @patch.dict("os.environ", {"GITHUB_TOKEN": "ghp_test"})
@@ -146,7 +154,7 @@ class TestGitHubRequest:
         mock_request.return_value = mock_response
 
         with pytest.raises(RuntimeError, match="GitHub API error 500"):
-            _github_request("GET", "/repos/owner/repo")
+            _github_request("GET", "/repos/owner/repo/issues/1")
 
     @patch("souschef.github.agent_control.requests.request")
     @patch.dict("os.environ", {"GITHUB_TOKEN": "ghp_test"})
@@ -155,7 +163,7 @@ class TestGitHubRequest:
         mock_request.side_effect = requests.exceptions.ConnectionError("Network error")
 
         with pytest.raises(RuntimeError, match="GitHub API request failed"):
-            _github_request("GET", "/repos/owner/repo")
+            _github_request("GET", "/repos/owner/repo/issues/1")
 
     @patch("souschef.github.agent_control.requests.request")
     @patch.dict("os.environ", {"GITHUB_TOKEN": "ghp_test"})
@@ -164,7 +172,39 @@ class TestGitHubRequest:
         mock_request.side_effect = requests.exceptions.Timeout("Request timeout")
 
         with pytest.raises(RuntimeError, match="GitHub API request failed"):
-            _github_request("GET", "/repos/owner/repo")
+            _github_request("GET", "/repos/owner/repo/issues/1")
+
+    @patch("souschef.github.agent_control.requests.request")
+    @patch.dict("os.environ", {"GITHUB_TOKEN": "ghp_test"})
+    def test_github_request_rejects_unexpected_api_path(self, mock_request):
+        """Only issue label/comment paths may reach the GitHub request client."""
+        with pytest.raises(RuntimeError, match="Invalid GitHub issue API path"):
+            _github_request("GET", "/repos/owner/repo/issues/1/../../contents")
+
+        mock_request.assert_not_called()
+
+    @patch("souschef.github.agent_control.requests.request")
+    @patch.dict("os.environ", {"GITHUB_TOKEN": "ghp_test"})
+    def test_github_request_allows_leading_dot_repository_name(self, mock_request):
+        """A valid leading-dot repository such as .github passes path validation."""
+        mock_request.return_value = MagicMock(status_code=200)
+
+        response = _github_request("GET", "/repos/owner/.github/issues/1")
+
+        assert response is not None
+        mock_request.assert_called_once()
+
+    @pytest.mark.parametrize("repository", [".", ".."])
+    @patch("souschef.github.agent_control.requests.request")
+    @patch.dict("os.environ", {"GITHUB_TOKEN": "ghp_test"})
+    def test_github_request_rejects_dot_path_components(
+        self, mock_request, repository: str
+    ):
+        """Standalone dot components are not accepted as repository names."""
+        with pytest.raises(RuntimeError, match="Invalid GitHub issue API path"):
+            _github_request("GET", f"/repos/owner/{repository}/issues/1")
+
+        mock_request.assert_not_called()
 
 
 class TestIssueHasLabel:
@@ -386,7 +426,7 @@ class TestGetRecentAgentComments:
 
         result = _get_recent_agent_comments("owner", "repo", 42)
 
-        assert "No recent activity (no agent markers)" in result
+        assert "No recent tracking comments" in result
 
     @patch("souschef.github.agent_control._github_request")
     def test_get_recent_comments_none_response(self, mock_request):
@@ -449,26 +489,25 @@ class TestFormatStatusDetails:
     def test_format_status_active(self):
         """Test formatting details for active status."""
         details = _format_status_details("active")
-        assert "currently working" in details
-        assert "pull request" in details
+        assert "active tracking label is present" in details
+        assert "does not confirm" in details
 
     def test_format_status_paused(self):
-        """Test formatting details for paused status."""
+        """Test paused tracking state does not claim an agent was paused."""
         details = _format_status_details("paused")
         assert "paused" in details
-        assert "resume" in details
+        assert "No agent pause was issued" in details
 
     def test_format_status_stopped(self):
-        """Test formatting details for stopped status."""
+        """Test stopped tracking state does not claim an agent was stopped."""
         details = _format_status_details("stopped")
-        assert "cancelled" in details
-        assert "new assignment" in details
+        assert "No agent was stopped" in details
 
     def test_format_status_not_assigned(self):
         """Test formatting details for not_assigned status."""
         details = _format_status_details("not_assigned")
-        assert "currently assigned" in details
-        assert "assign" in details
+        assert "No SousChef Copilot-agent tracking label" in details
+        assert "does not confirm" in details
 
     def test_format_status_unknown(self):
         """Test formatting details for unknown status."""
