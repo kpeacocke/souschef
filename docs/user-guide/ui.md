@@ -78,6 +78,12 @@ The **Migrate Cookbook** page provides a comprehensive interface for end-to-end 
 - **Deployment Modes**:
   - **Simulation Mode**: Preview AWX/AAP deployment without creating actual resources
   - **Live Deployment**: Execute end-to-end migration with actual resource creation
+
+  Simulation output is temporary. Download any archives before starting another
+  simulation or analysis, or ending the session. Output is removed when replaced,
+  reset, or the session is released; an unexpected process termination may leave
+  temporary files behind.
+
 - **Platform Connection**: Configure server URL, credentials, and SSL verification for live deployments
 - **Conversion Options** (expandable):
   - Generate Git repository structure

@@ -88,6 +88,9 @@
                 // SonarQube for IDE requires a Java home directory, not the executable
                 "sonarlint.ls.javaHome": "/usr/local/sdkman/candidates/java/current",
 
+                // Use the container's CodeQL CLI rather than a host-specific path
+                "codeQL.cli.executablePath": "/usr/local/bin/codeql",
+
                 // Editor settings
                 "files.eol": "\n",
                 "files.insertFinalNewline": true,

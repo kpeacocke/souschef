@@ -226,11 +226,12 @@ WARNING: minor issue
     assert isinstance(parsed["warnings"], list)
 
 
-def test_validate_output_path():
+def test_validate_output_path(tmp_path, monkeypatch):
     from souschef.ui.pages.cookbook_analysis import _validate_output_path
 
-    local_dir = Path.cwd() / "test-output" / "validate_path_test"
-    local_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.chdir(tmp_path)
+    local_dir = tmp_path / "output"
+    local_dir.mkdir()
 
     p = _validate_output_path(str(local_dir))
     assert p == local_dir.resolve()
@@ -2070,6 +2071,90 @@ def test_simulate_chef_to_awx_migration_ui_invalid_json(mock_st):
         )
 
     mock_st.error.assert_called()
+
+
+@patch("souschef.ui.pages.cookbook_analysis.st")
+def test_simulation_output_lifecycle(mock_st, tmp_path, monkeypatch):
+    """Keep current output until replacement, then release it with the session."""
+    from souschef.ui.pages.cookbook_analysis import _simulate_chef_to_awx_migration_ui
+
+    monkeypatch.chdir(tmp_path)
+    mock_st.session_state = SessionState()
+
+    def simulate(**kwargs):
+        output = Path(kwargs["output_path"])
+        (output / "archive.tar.gz").write_bytes(b"archive")
+        return '{"archives": {}}'
+
+    with patch("souschef.server.simulate_chef_to_awx_migration", side_effect=simulate):
+        _simulate_chef_to_awx_migration_ui("/cookbooks", "awx", True, True)
+        first = Path(mock_st.session_state.simulation_output_path)
+        assert (first / "archive.tar.gz").read_bytes() == b"archive"
+        _simulate_chef_to_awx_migration_ui("/cookbooks", "awx", True, True)
+
+    second = Path(mock_st.session_state.simulation_output_path)
+    assert not first.exists()
+    assert (second / "archive.tar.gz").is_file()
+    mock_st.session_state.clear()
+    assert not second.exists()
+
+
+@pytest.mark.parametrize("failure", ["invalid_json", "exception"])
+@patch("souschef.ui.pages.cookbook_analysis.st")
+def test_failed_simulation_cleans_partial_output_and_preserves_previous(
+    mock_st, tmp_path, monkeypatch, failure
+):
+    """Clean failed output without invalidating the previous simulation."""
+    from souschef.ui.pages.cookbook_analysis import _simulate_chef_to_awx_migration_ui
+
+    monkeypatch.chdir(tmp_path)
+    mock_st.session_state = SessionState()
+
+    def simulate(**kwargs):
+        output = Path(kwargs["output_path"])
+        (output / "partial").write_text("output")
+        if mock_st.session_state.get("simulation_result"):
+            if failure == "exception":
+                raise RuntimeError("simulation failed")
+            return "invalid JSON"
+        return '{"archives": {}}'
+
+    with patch("souschef.server.simulate_chef_to_awx_migration", side_effect=simulate):
+        _simulate_chef_to_awx_migration_ui("/cookbooks", "awx", True, True)
+        previous = Path(mock_st.session_state.simulation_output_path)
+        _simulate_chef_to_awx_migration_ui("/cookbooks", "awx", True, True)
+
+    assert mock_st.session_state.simulation_output_path == str(previous)
+    assert (previous / "partial").is_file()
+    assert list(tmp_path.iterdir()) == [previous]
+    mock_st.error.assert_called_once()
+    mock_st.session_state.clear()
+
+
+@patch("souschef.ui.pages.cookbook_analysis.st")
+def test_new_analysis_cleans_simulation_output(mock_st, tmp_path, monkeypatch):
+    """Discard simulation files when starting a new analysis."""
+    from souschef.ui.pages.cookbook_analysis import (
+        _display_results_view,
+        _simulate_chef_to_awx_migration_ui,
+    )
+
+    monkeypatch.chdir(tmp_path)
+    mock_st.session_state = SessionState(analysis_page_key=0)
+    mock_st.columns.return_value = [_ctx(), _ctx()]
+    mock_st.button.return_value = True
+    with patch(
+        "souschef.server.simulate_chef_to_awx_migration",
+        return_value='{"archives": {}}',
+    ):
+        _simulate_chef_to_awx_migration_ui("/cookbooks", "awx", True, True)
+
+    output = Path(mock_st.session_state.simulation_output_path)
+    with patch("souschef.ui.pages.cookbook_analysis._display_analysis_results"):
+        _display_results_view()
+
+    assert not output.exists()
+    assert mock_st.session_state.simulation_result is None
 
 
 @patch("souschef.ui.pages.cookbook_analysis.st")

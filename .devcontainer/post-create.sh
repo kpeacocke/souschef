@@ -153,16 +153,11 @@ else
     echo "Terraform CLI not found in PATH"
 fi
 
-# Verify CodeQL installation (if available)
 if command -v codeql &> /dev/null; then
-    CODEQL_VERSION=$(codeql version --format=text 2>/dev/null | head -n1 || echo "unknown")
-    echo "CodeQL CLI available: $CODEQL_VERSION"
+    echo "CodeQL CLI available:"
+    codeql version --format=text
 else
-    ARCH=$(uname -m)
-    if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
-        echo "CodeQL CLI not available (ARM64 architecture)"
-        echo "       CodeQL analysis will run via GitHub Actions"
-    fi
+    echo "CodeQL CLI not available; CodeQL analysis can run via GitHub Actions."
 fi
 
 # Run quick test to verify setup

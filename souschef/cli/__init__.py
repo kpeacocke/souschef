@@ -212,6 +212,12 @@ def _validate_user_path(path_input: str | None) -> Path:
         raise ValueError(f"Invalid path: {e}") from e
 
 
+def _validate_conversion_result(content: str) -> None:
+    """Reject converter error messages before writing output files."""
+    if content.startswith(("Error", "An error occurred", "Invalid path")):
+        raise ValueError(content)
+
+
 class ConversionResults(TypedDict):
     """Type definition for cookbook conversion results."""
 
@@ -1204,6 +1210,7 @@ def convert_recipe(cookbook_path: str, recipe_name: str, output_path: str) -> No
         # Generate playbook
         click.echo(f"Converting {cookbook_name}::{recipe_name} to Ansible...")
         playbook_yaml = generate_playbook_from_recipe(str(recipe_file))
+        _validate_conversion_result(playbook_yaml)
 
         # Write output
         output_file = output_dir / f"{recipe_name}.yml"
@@ -1374,6 +1381,7 @@ def convert_habitat(plan_path: str, output_path: str, base_image: str) -> None:
         from souschef.server import convert_habitat_to_dockerfile
 
         dockerfile_content = convert_habitat_to_dockerfile(str(plan_path), base_image)
+        _validate_conversion_result(dockerfile_content)
 
         # Write Dockerfile
         dockerfile_path = output_dir / "Dockerfile"
@@ -1441,7 +1449,11 @@ def convert_inspec(profile_path: str, output_path: str, output_format: str) -> N
         # Call server function to convert
         from souschef.server import convert_inspec_to_test
 
-        test_content = convert_inspec_to_test(str(profile_path), output_format)
+        converter_format = (
+            "ansible_assert" if output_format == "ansible" else output_format
+        )
+        test_content = convert_inspec_to_test(str(profile_path), converter_format)
+        _validate_conversion_result(test_content)
 
         # Determine output filename based on format
         filename_map = {

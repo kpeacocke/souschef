@@ -26,7 +26,7 @@ func TestAccInSpecMigrationResourceAllFormats(t *testing.T) {
 }
 
 func testInSpecAllFormatOps(t *testing.T, format string) {
-	outputPath := getTestOutputPath("inspec", format)
+	outputPath := getTestOutputPath(t, "inspec", format)
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -57,8 +57,8 @@ func testInSpecAllFormatOps(t *testing.T, format string) {
 
 // TestAccInSpecMigrationResourceUpdateAllPaths tests updating all possible paths
 func TestAccInSpecMigrationResourceUpdateAllPaths(t *testing.T) {
-	outputPath1 := getTestOutputPath("inspec", "update1")
-	outputPath2 := getTestOutputPath("inspec", "update2")
+	outputPath1 := getTestOutputPath(t, "inspec", "update1")
+	outputPath2 := getTestOutputPath(t, "inspec", "update2")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -82,7 +82,7 @@ func TestAccInSpecMigrationResourceUpdateAllPaths(t *testing.T) {
 
 // TestAccInSpecMigrationResourceDeleteCleanup tests delete operation and file cleanup
 func TestAccInSpecMigrationResourceDeleteCleanup(t *testing.T) {
-	outputPath := getTestOutputPath("inspec", "delete_test")
+	outputPath := getTestOutputPath(t, "inspec", "delete_test")
 
 	// Ensure directory exists
 	os.MkdirAll(outputPath, 0755)

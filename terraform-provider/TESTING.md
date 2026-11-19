@@ -241,10 +241,9 @@ func TestAccMigrationResource(t *testing.T) {
 - ✅ All security warnings resolved in Go provider code
 
 ### Test Fixtures
-All test output paths use `/workspaces/souschef/test-output/` to:
-1. Avoid `/tmp/` security warnings
-2. Enable debugging (output persists)
-3. Maintain workspace isolation
+Acceptance tests use isolated temporary output directories, which Go removes
+after each test. The tests configure `SOUSCHEF_WORKSPACE_ROOT` to the repository
+root so the SousChef CLI can access the checked-in input fixtures.
 
 ## Continuous Integration
 

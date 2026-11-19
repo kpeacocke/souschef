@@ -2,6 +2,7 @@ package provider
 
 import (
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -10,10 +11,10 @@ import (
 var (
 	testHabitatMigrationResourceName = "souschef_habitat_migration.test"
 	testHabitatPlanPath              = getFixturePath("habitat_package") + "/plan.sh"
-	testHabitatOutputPath            = getTestOutputPath("docker")
 )
 
 func TestAccHabitatMigrationResource(t *testing.T) {
+	testHabitatOutputPath := getTestOutputPath(t, "docker")
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -28,6 +29,7 @@ func TestAccHabitatMigrationResource(t *testing.T) {
 					resource.TestCheckResourceAttrSet(testHabitatMigrationResourceName, "id"),
 					resource.TestCheckResourceAttrSet(testHabitatMigrationResourceName, "package_name"),
 					resource.TestCheckResourceAttrSet(testHabitatMigrationResourceName, "dockerfile_content"),
+					resource.TestMatchResourceAttr(testHabitatMigrationResourceName, "dockerfile_content", regexp.MustCompile(`(?m)^FROM ubuntu:latest$`)),
 				),
 			},
 			// Update testing with custom base image

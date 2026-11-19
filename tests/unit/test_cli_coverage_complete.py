@@ -622,7 +622,7 @@ def test_convert_inspec_full_success(
     output_dir = tmp_path / "output"
 
     with patch(
-        "souschef.cli.convert_inspec_to_test",
+        "souschef.server.convert_inspec_to_test",
         return_value="def test_nginx():\n    assert True",
     ):
         _invoke(
@@ -635,6 +635,85 @@ def test_convert_inspec_full_success(
     captured = capsys.readouterr()
     assert "Successfully converted InSpec profile to testinfra format" in captured.out
     assert "Test file:" in captured.out
+
+
+@pytest.mark.parametrize(
+    ("command", "converter", "error", "output_file"),
+    [
+        (
+            "recipe",
+            "souschef.cli.generate_playbook_from_recipe",
+            "Error: denied",
+            "default.yml",
+        ),
+        (
+            "habitat",
+            "souschef.server.convert_habitat_to_dockerfile",
+            "Error during validation: denied",
+            "Dockerfile",
+        ),
+        (
+            "inspec",
+            "souschef.server.convert_inspec_to_test",
+            "An error occurred during conversion: denied",
+            "test_spec.py",
+        ),
+    ],
+)
+def test_conversion_cli_rejects_error_content(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    command,
+    converter,
+    error,
+    output_file,
+) -> None:
+    """Converter failures must not be written as successful output."""
+    cookbook = tmp_path / "cookbook"
+    (cookbook / "recipes").mkdir(parents=True)
+    (cookbook / "recipes" / "default.rb").write_text("package 'nginx'")
+    plan = tmp_path / "plan.sh"
+    plan.write_text("pkg_name=nginx")
+    profile = tmp_path / "profile"
+    profile.mkdir()
+    output = tmp_path / "output"
+    arguments = {
+        "recipe": (
+            "convert-recipe",
+            {"cookbook_path": str(cookbook), "recipe_name": "default"},
+        ),
+        "habitat": (
+            "convert-habitat",
+            {"plan_path": str(plan), "base_image": "ubuntu"},
+        ),
+        "inspec": (
+            "convert-inspec",
+            {"profile_path": str(profile), "output_format": "testinfra"},
+        ),
+    }
+    cli_command, kwargs = arguments[command]
+    with patch(converter, return_value=error), pytest.raises(SystemExit) as exc:
+        _invoke(cli_command, output_path=str(output), **kwargs)
+    assert exc.value.code == 1
+    assert error in capsys.readouterr().err
+    assert not (output / output_file).exists()
+
+
+def test_convert_inspec_ansible_format_maps_to_converter(tmp_path: Path) -> None:
+    """The CLI's Ansible format selects the converter's ansible_assert format."""
+    profile = tmp_path / "profile"
+    profile.mkdir()
+    with patch(
+        "souschef.server.convert_inspec_to_test",
+        return_value="---\n- ansible.builtin.assert:",
+    ) as convert:
+        _invoke(
+            "convert-inspec",
+            profile_path=str(profile),
+            output_path=str(tmp_path / "output"),
+            output_format="ansible",
+        )
+    convert.assert_called_once_with(str(profile), "ansible_assert")
 
 
 # ============================================================================
