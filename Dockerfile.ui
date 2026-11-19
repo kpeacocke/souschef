@@ -6,7 +6,7 @@ ARG POETRY_VERSION=2.5.1
 # ============================================================================
 # Base Stage - Common configuration for all stages
 # ============================================================================
-FROM python:3.14-slim-bookworm@sha256:3fe1a0b6c2d6b2ebb572906cdabeca75aeb558c0c17db5ffefbcf8094871c32b AS base
+FROM python@sha256:3fe1a0b6c2d6b2ebb572906cdabeca75aeb558c0c17db5ffefbcf8094871c32b AS base
 
 # Metadata for Docker registry and CI/CD
 LABEL org.opencontainers.image.title="SousChef" \
@@ -56,7 +56,6 @@ COPY pyproject.toml poetry.lock ./
 # Upgrade pip to pick up security fixes (pinned for reproducibility)
 RUN python -m pip install --no-cache-dir --only-binary :all: "pip==26.2.0" \
     && python -m pip install --no-cache-dir --only-binary :all: "poetry==$POETRY_VERSION" \
-    && poetry config installer.only-binary :all: \
     && python -m venv --without-pip /opt/venv
 
 ENV VIRTUAL_ENV=/opt/venv \
@@ -65,7 +64,7 @@ ENV VIRTUAL_ENV=/opt/venv \
 # Install production dependencies with all required extras
 # Use --no-interaction for automated environments
 # --only=main installs only main dependencies (excludes dev), --extras specifies optional packages
-RUN poetry install \
+RUN POETRY_INSTALLER_ONLY_BINARY=:all: poetry install \
     --only=main \
     --extras "ui ai storage" \
     --no-interaction \

@@ -1899,11 +1899,16 @@ def _generate_deployment_migration_recommendations(
     deployment_count = len(patterns.get("deployment_patterns", []))
 
     if deployment_count == 0:
-        recommendations.append(
-            "• No advanced deployment patterns detected - start with rolling updates"
+        recommendations.extend(
+            [
+                (
+                    "• No advanced deployment patterns detected - "
+                    "start with rolling updates"
+                ),
+                "• Implement health checks for reliable deployments",
+                "• Add rollback mechanisms for quick recovery",
+            ]
         )
-        recommendations.append("• Implement health checks for reliable deployments")
-        recommendations.append("• Add rollback mechanisms for quick recovery")
     else:
         for pattern in patterns.get("deployment_patterns", []):
             if pattern["type"] == "blue_green":

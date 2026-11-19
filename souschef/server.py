@@ -829,6 +829,14 @@ _MAX_PLAN_PATHS = 20
 _MAX_PLAN_PATHS_LENGTH = 8192
 _PLAN_PATH_LABEL = "Plan path"
 _COOKBOOK_PATH_LABEL = "Cookbook path"
+_CHEF_CLIENT_KEY_PATH_LABEL = "Chef client key path"
+_COPILOT_AGENT_TRACKING_STATE_OPERATION = "updating Copilot-agent tracking state"
+_OUTPUT_PATH_LABEL = "Output path"
+_ANSIBLE_ENVIRONMENT_PATH_LABEL = "Ansible environment path"
+_POWERSHELL_SCRIPT_PATH_LABEL = "PowerShell script path"
+_BASH_SCRIPT_PATH_LABEL = "Bash script path"
+_PUPPET_MANIFEST_PATH_LABEL = "Puppet manifest path"
+_PUPPET_MODULE_PATH_LABEL = "Puppet module path"
 
 
 def _validate_path_length(path: str, label: str) -> None:
@@ -3216,7 +3224,11 @@ def validate_chef_server_connection(
             client_name,
             organisation=organisation,
             client_key_path=(
-                str(_normalise_workspace_path(client_key_path, "Chef client key path"))
+                str(
+                    _normalise_workspace_path(
+                        client_key_path, _CHEF_CLIENT_KEY_PATH_LABEL
+                    )
+                )
                 if client_key_path
                 else None
             ),
@@ -3265,7 +3277,11 @@ def get_chef_nodes(
             organisation=organisation or None,
             client_name=client_name or None,
             client_key_path=(
-                str(_normalise_workspace_path(client_key_path, "Chef client key path"))
+                str(
+                    _normalise_workspace_path(
+                        client_key_path, _CHEF_CLIENT_KEY_PATH_LABEL
+                    )
+                )
                 if client_key_path
                 else None
             ),
@@ -3328,7 +3344,11 @@ def get_chef_roles(
             organisation=organisation or None,
             client_name=client_name or None,
             client_key_path=(
-                str(_normalise_workspace_path(client_key_path, "Chef client key path"))
+                str(
+                    _normalise_workspace_path(
+                        client_key_path, _CHEF_CLIENT_KEY_PATH_LABEL
+                    )
+                )
                 if client_key_path
                 else None
             ),
@@ -3375,7 +3395,11 @@ def get_chef_environments(
             organisation=organisation or None,
             client_name=client_name or None,
             client_key_path=(
-                str(_normalise_workspace_path(client_key_path, "Chef client key path"))
+                str(
+                    _normalise_workspace_path(
+                        client_key_path, _CHEF_CLIENT_KEY_PATH_LABEL
+                    )
+                )
                 if client_key_path
                 else None
             ),
@@ -3428,7 +3452,11 @@ def get_chef_cookbooks(
             organisation=organisation or None,
             client_name=client_name or None,
             client_key_path=(
-                str(_normalise_workspace_path(client_key_path, "Chef client key path"))
+                str(
+                    _normalise_workspace_path(
+                        client_key_path, _CHEF_CLIENT_KEY_PATH_LABEL
+                    )
+                )
                 if client_key_path
                 else None
             ),
@@ -3481,7 +3509,11 @@ def get_chef_policies(
             organisation=organisation or None,
             client_name=client_name or None,
             client_key_path=(
-                str(_normalise_workspace_path(client_key_path, "Chef client key path"))
+                str(
+                    _normalise_workspace_path(
+                        client_key_path, _CHEF_CLIENT_KEY_PATH_LABEL
+                    )
+                )
                 if client_key_path
                 else None
             ),
@@ -4000,7 +4032,7 @@ def pause_github_copilot_agent(
         )
     except Exception as e:
         return format_error_with_context(
-            e, "updating Copilot-agent tracking state", f"{owner}/{repo}#{issue_number}"
+            e, _COPILOT_AGENT_TRACKING_STATE_OPERATION, f"{owner}/{repo}#{issue_number}"
         )
 
 
@@ -4037,7 +4069,7 @@ def stop_github_copilot_agent(
         )
     except Exception as e:
         return format_error_with_context(
-            e, "updating Copilot-agent tracking state", f"{owner}/{repo}#{issue_number}"
+            e, _COPILOT_AGENT_TRACKING_STATE_OPERATION, f"{owner}/{repo}#{issue_number}"
         )
 
 
@@ -4074,7 +4106,7 @@ def resume_github_copilot_agent(
         )
     except Exception as e:
         return format_error_with_context(
-            e, "updating Copilot-agent tracking state", f"{owner}/{repo}#{issue_number}"
+            e, _COPILOT_AGENT_TRACKING_STATE_OPERATION, f"{owner}/{repo}#{issue_number}"
         )
 
 
@@ -4153,7 +4185,7 @@ def generate_ansible_repository(
     )
 
     try:
-        output_path = str(_normalise_workspace_path(output_path, "Output path"))
+        output_path = str(_normalise_workspace_path(output_path, _OUTPUT_PATH_LABEL))
         init_git_bool = init_git.lower() in ("yes", "true", "1")
 
         # Determine repo type
@@ -4276,7 +4308,7 @@ def convert_cookbook_comprehensive(
             cookbook_path, _COOKBOOK_PATH_LABEL, workspace_root
         )
         output_dir = _normalise_workspace_path(
-            output_path, "Output path", workspace_root
+            output_path, _OUTPUT_PATH_LABEL, workspace_root
         )
 
         if not cookbook_dir.exists():
@@ -4907,7 +4939,7 @@ def _validate_conversion_paths(
 
     try:
         output_dir = _normalise_workspace_path(
-            output_path, "Output path", workspace_root
+            output_path, _OUTPUT_PATH_LABEL, workspace_root
         )
     except ValueError as e:
         raise ValueError(f"Output path is invalid or outside workspace: {e}") from e
@@ -5336,7 +5368,7 @@ def assess_ansible_upgrade_readiness(environment_path: str) -> str:
 
     try:
         environment_path = str(
-            _normalise_workspace_path(environment_path, "Ansible environment path")
+            _normalise_workspace_path(environment_path, _ANSIBLE_ENVIRONMENT_PATH_LABEL)
         )
         result = assess_ansible_environment(environment_path)
         return json.dumps(result, indent=2, default=str)
@@ -5367,7 +5399,7 @@ def plan_ansible_upgrade(environment_path: str, target_version: str) -> str:
 
     try:
         environment_path = str(
-            _normalise_workspace_path(environment_path, "Ansible environment path")
+            _normalise_workspace_path(environment_path, _ANSIBLE_ENVIRONMENT_PATH_LABEL)
         )
 
         # Detect current version - look for ansible in the environment first
@@ -5483,7 +5515,7 @@ def generate_ansible_upgrade_test_plan(environment_path: str) -> str:
 
     try:
         environment_path = str(
-            _normalise_workspace_path(environment_path, "Ansible environment path")
+            _normalise_workspace_path(environment_path, _ANSIBLE_ENVIRONMENT_PATH_LABEL)
         )
         return generate_upgrade_testing_plan(environment_path)
     except Exception as e:
@@ -5855,7 +5887,7 @@ def start_v2_migration(
         client_key_path = chef_payload.get("client_key_path")
         if client_key_path:
             client_key_path = str(
-                _normalise_workspace_path(client_key_path, "Chef client key path")
+                _normalise_workspace_path(client_key_path, _CHEF_CLIENT_KEY_PATH_LABEL)
             )
 
         offline_bundle_path = ingestion_payload.get("offline_bundle_path")
@@ -7010,7 +7042,7 @@ def parse_powershell(script_path: str) -> str:
     """
     try:
         safe_path = str(
-            _normalise_workspace_path(script_path, "PowerShell script path")
+            _normalise_workspace_path(script_path, _POWERSHELL_SCRIPT_PATH_LABEL)
         )
         return _parse_powershell_script(safe_path)
     except Exception as e:
@@ -7050,7 +7082,7 @@ def convert_powershell(
     """
     try:
         safe_path = str(
-            _normalise_workspace_path(script_path, "PowerShell script path")
+            _normalise_workspace_path(script_path, _POWERSHELL_SCRIPT_PATH_LABEL)
         )
         return _convert_powershell_to_ansible(safe_path, playbook_name, hosts)
     except Exception as e:
@@ -7117,7 +7149,7 @@ def generate_windows_requirements(
 
         try:
             safe_path = str(
-                _normalise_workspace_path(script_path, "PowerShell script path")
+                _normalise_workspace_path(script_path, _POWERSHELL_SCRIPT_PATH_LABEL)
             )
         except Exception as e:
             return format_error_with_context(
@@ -7160,7 +7192,7 @@ def generate_powershell_role(
 
     try:
         safe_path = str(
-            _normalise_workspace_path(script_path, "PowerShell script path")
+            _normalise_workspace_path(script_path, _POWERSHELL_SCRIPT_PATH_LABEL)
         )
     except (OSError, ValueError) as e:
         return _json.dumps(
@@ -7226,7 +7258,7 @@ def generate_powershell_job_template(
 
     try:
         safe_path = str(
-            _normalise_workspace_path(script_path, "PowerShell script path")
+            _normalise_workspace_path(script_path, _POWERSHELL_SCRIPT_PATH_LABEL)
         )
     except Exception as e:
         return format_error_with_context(
@@ -7279,7 +7311,7 @@ def analyze_powershell_fidelity(
 
     try:
         safe_path = str(
-            _normalise_workspace_path(script_path, "PowerShell script path")
+            _normalise_workspace_path(script_path, _POWERSHELL_SCRIPT_PATH_LABEL)
         )
     except (OSError, ValueError) as e:
         return _json.dumps(
@@ -7325,7 +7357,7 @@ def parse_bash_script(script_path: str) -> str:
 
     """
     try:
-        safe_path = str(_normalise_workspace_path(script_path, "Bash script path"))
+        safe_path = str(_normalise_workspace_path(script_path, _BASH_SCRIPT_PATH_LABEL))
         return _parse_bash_script(safe_path)
     except Exception as e:
         return format_error_with_context(e, "parsing Bash script", script_path)
@@ -7353,7 +7385,7 @@ def convert_bash_to_ansible(script_path: str) -> str:
 
     """
     try:
-        safe_path = str(_normalise_workspace_path(script_path, "Bash script path"))
+        safe_path = str(_normalise_workspace_path(script_path, _BASH_SCRIPT_PATH_LABEL))
         return _convert_bash_to_ansible(safe_path)
     except (OSError, ValueError) as e:
         message = format_error_with_context(e, "converting Bash script", script_path)
@@ -7383,7 +7415,7 @@ def generate_ansible_role_from_bash(
 
     """
     try:
-        safe_path = str(_normalise_workspace_path(script_path, "Bash script path"))
+        safe_path = str(_normalise_workspace_path(script_path, _BASH_SCRIPT_PATH_LABEL))
     except (OSError, ValueError) as e:
         return json.dumps(
             {
@@ -7480,7 +7512,7 @@ def parse_puppet_manifest(manifest_path: str) -> str:
     """
     try:
         safe_path = str(
-            _normalise_workspace_path(manifest_path, "Puppet manifest path")
+            _normalise_workspace_path(manifest_path, _PUPPET_MANIFEST_PATH_LABEL)
         )
         return _parse_puppet_manifest(safe_path)
     except Exception as e:
@@ -7505,7 +7537,9 @@ def parse_puppet_module(module_path: str) -> str:
 
     """
     try:
-        safe_path = str(_normalise_workspace_path(module_path, "Puppet module path"))
+        safe_path = str(
+            _normalise_workspace_path(module_path, _PUPPET_MODULE_PATH_LABEL)
+        )
         return _parse_puppet_module(safe_path)
     except Exception as e:
         return format_error_with_context(e, "parsing Puppet module", module_path)
@@ -7541,7 +7575,7 @@ def convert_puppet_manifest_to_ansible(manifest_path: str) -> str:
     """
     try:
         safe_path = str(
-            _normalise_workspace_path(manifest_path, "Puppet manifest path")
+            _normalise_workspace_path(manifest_path, _PUPPET_MANIFEST_PATH_LABEL)
         )
         return _convert_puppet_manifest_to_ansible(safe_path)
     except Exception as e:
@@ -7569,7 +7603,9 @@ def convert_puppet_module_to_ansible(
 
     """
     try:
-        safe_path = str(_normalise_workspace_path(module_path, "Puppet module path"))
+        safe_path = str(
+            _normalise_workspace_path(module_path, _PUPPET_MODULE_PATH_LABEL)
+        )
         if os_family:
             return _convert_puppet_module_to_ansible(safe_path, environment, os_family)
         if environment:
@@ -7672,7 +7708,7 @@ def convert_puppet_manifest_to_ansible_with_ai(
     """
     try:
         safe_path = str(
-            _normalise_workspace_path(manifest_path, "Puppet manifest path")
+            _normalise_workspace_path(manifest_path, _PUPPET_MANIFEST_PATH_LABEL)
         )
         return _convert_puppet_manifest_ai(
             safe_path,
@@ -7724,7 +7760,9 @@ def convert_puppet_module_to_ansible_with_ai(
 
     """
     try:
-        safe_path = str(_normalise_workspace_path(module_path, "Puppet module path"))
+        safe_path = str(
+            _normalise_workspace_path(module_path, _PUPPET_MODULE_PATH_LABEL)
+        )
         return _convert_puppet_module_ai(
             safe_path,
             ai_provider=ai_provider,
