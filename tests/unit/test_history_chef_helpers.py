@@ -1183,9 +1183,10 @@ class TestChefServerSettingsHelpers:
         mock_st.success.assert_called()
 
     @patch("souschef.ui.pages.chef_server_settings.st")
-    def test_run_bulk_conversion_success(self, mock_st, tmp_path):
+    def test_run_bulk_conversion_success(self, mock_st, tmp_path, monkeypatch):
         from souschef.ui.pages.chef_server_settings import _run_bulk_conversion
 
+        monkeypatch.chdir(tmp_path)
         mock_st.spinner.return_value = _ctx()
         mock_st.progress.return_value = MagicMock()
         mock_st.empty.return_value = MagicMock()

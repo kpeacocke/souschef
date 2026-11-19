@@ -2,6 +2,7 @@ package provider
 
 import (
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -15,10 +16,10 @@ const (
 var (
 	testBatchMigrationResourceName = "souschef_batch_migration.test"
 	testBatchCookbookPath          = getFixturePath("sample_cookbook")
-	testBatchOutputPath            = getTestOutputPath("ansible", "batch")
 )
 
 func TestAccBatchMigrationResource(t *testing.T) {
+	testBatchOutputPath := getTestOutputPath(t, "ansible", "batch")
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -35,6 +36,7 @@ func TestAccBatchMigrationResource(t *testing.T) {
 					resource.TestCheckResourceAttrSet(testBatchMigrationResourceName, "cookbook_name"),
 					resource.TestCheckResourceAttrSet(testBatchMigrationResourceName, "playbook_count"),
 					resource.TestCheckResourceAttrSet(testBatchMigrationResourceName, "playbooks.default"),
+					resource.TestMatchResourceAttr(testBatchMigrationResourceName, "playbooks.default", regexp.MustCompile(`(?m)^- name: Configure system`)),
 				),
 			},
 			// Update testing - add second recipe to trigger Update path
@@ -48,6 +50,7 @@ func TestAccBatchMigrationResource(t *testing.T) {
 					resource.TestCheckResourceAttrSet(testBatchMigrationResourceName, "playbook_count"),
 					resource.TestCheckResourceAttrSet(testBatchMigrationResourceName, "playbooks.default"),
 					resource.TestCheckResourceAttrSet(testBatchMigrationResourceName, "playbooks.server"),
+					resource.TestMatchResourceAttr(testBatchMigrationResourceName, "playbooks.server", regexp.MustCompile(`(?m)^- name: Configure system`)),
 				),
 			},
 			// Update back testing - remove recipe to test another scenario

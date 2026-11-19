@@ -899,6 +899,7 @@ def _display_results_view() -> None:
             help="Start a new analysis",
             key=f"new_analysis_{st.session_state.analysis_page_key}",
         ):
+            _cleanup_simulation_output()
             st.session_state.analysis_results = None
             st.session_state.holistic_assessment = None
             st.session_state.analysis_cookbook_path = None
@@ -2276,6 +2277,14 @@ def _display_conversion_report(result_text: str):
         st.code(result_text, language="markdown")
 
 
+def _cleanup_simulation_output() -> None:
+    """Remove the current session's temporary simulation output."""
+    output_directory = st.session_state.get("simulation_temp_dir")
+    if output_directory is not None:
+        output_directory.cleanup()
+        del st.session_state["simulation_temp_dir"]
+
+
 def _simulate_chef_to_awx_migration_ui(
     cookbooks_path: str,
     target_platform: str,
@@ -2294,36 +2303,39 @@ def _simulate_chef_to_awx_migration_ui(
         migration_config: Optional full migration configuration with v2.0 options
 
     """
-    import tempfile
-
     try:
         from souschef.server import simulate_chef_to_awx_migration
 
-        output_dir = Path(
-            tempfile.mkdtemp(prefix="souschef_simulation_", dir=Path.cwd())
+        output_directory = tempfile.TemporaryDirectory(
+            prefix="souschef_simulation_", dir=Path.cwd()
         )
-        with contextlib.suppress(FileNotFoundError, OSError):
-            output_dir.chmod(0o700)
+        transferred = False
+        try:
+            output_dir = Path(output_directory.name)
 
-        # Display configuration being used
-        if migration_config:
-            with st.expander("Migration Configuration", expanded=False):
-                st.json(migration_config)
+            if migration_config:
+                with st.expander("Migration Configuration", expanded=False):
+                    st.json(migration_config)
 
-        result_json = simulate_chef_to_awx_migration(
-            cookbooks_path=cookbooks_path,
-            output_path=str(output_dir),
-            target_platform=target_platform,
-            include_repo=include_repo,
-            include_tar=include_tar,
-        )
+            result_json = simulate_chef_to_awx_migration(
+                cookbooks_path=cookbooks_path,
+                output_path=str(output_dir),
+                target_platform=target_platform,
+                include_repo=include_repo,
+                include_tar=include_tar,
+            )
+            result = json.loads(result_json)
+            if migration_config:
+                result["migration_config"] = migration_config
 
-        st.session_state.simulation_output_path = str(output_dir)
-        st.session_state.simulation_result = json.loads(result_json)
-
-        # Store additional migration config if provided
-        if migration_config:
-            st.session_state.simulation_result["migration_config"] = migration_config
+            _cleanup_simulation_output()
+            st.session_state.simulation_temp_dir = output_directory
+            st.session_state.simulation_output_path = str(output_dir)
+            st.session_state.simulation_result = result
+            transferred = True
+        finally:
+            if not transferred:
+                output_directory.cleanup()
 
         st.success("Simulation completed successfully")
     except json.JSONDecodeError:
@@ -2335,6 +2347,10 @@ def _simulate_chef_to_awx_migration_ui(
 def _display_simulation_results(simulation_result: dict) -> None:
     """Display simulation results and download options."""
     st.subheader("Simulation Results")
+    st.caption(
+        "Simulation files are temporary. Download archives before starting a new "
+        "simulation or analysis, or ending the session."
+    )
 
     with st.expander("Simulation Summary", expanded=True):
         st.json(simulation_result)

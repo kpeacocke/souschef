@@ -620,6 +620,7 @@ def test_parse_inspec_profile_special_file() -> None:
     """Test parse_inspec_profile returns error for special file types."""
     with (
         tempfile.NamedTemporaryFile(suffix=".rb") as tmp_f,
+        patch("souschef.parsers.inspec._get_workspace_root", return_value=Path.cwd()),
         patch.object(Path, "is_dir", return_value=False),
         patch.object(Path, "is_file", return_value=False),
         patch.object(Path, "exists", return_value=True),

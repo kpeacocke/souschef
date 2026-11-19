@@ -28,6 +28,17 @@ def test_parse_inspec_profile_path_traversal_blocked(tmp_path: Path) -> None:
     assert "Suggestion:" in result
 
 
+def test_parse_inspec_profile_respects_configured_workspace(monkeypatch) -> None:
+    """Profiles in the configured workspace work when the process runs elsewhere."""
+    root = Path(__file__).resolve().parents[2]
+    monkeypatch.chdir(root / "terraform-provider" / "internal" / "provider")
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(root))
+    result = parse_inspec_profile(
+        str(root / "tests" / "integration" / "fixtures" / "sample_inspec_profile")
+    )
+    assert json.loads(result)["controls_count"] > 0
+
+
 def test_parse_inspec_profile_empty_path() -> None:
     """Empty path should return error."""
     result = parse_inspec_profile("")
@@ -58,6 +69,7 @@ def test_parse_inspec_profile_invalid_path_type(tmp_path: Path) -> None:
                 "souschef.parsers.inspec._ensure_within_base_path",
                 return_value=fifo_path,
             ),
+            patch("souschef.parsers.inspec._get_workspace_root", return_value=tmp_path),
             patch("souschef.parsers.inspec.Path.exists", return_value=True),
             patch("souschef.parsers.inspec.Path.is_dir", return_value=False),
             patch("souschef.parsers.inspec.Path.is_file", return_value=False),

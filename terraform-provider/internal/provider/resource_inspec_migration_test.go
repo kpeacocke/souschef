@@ -2,6 +2,7 @@ package provider
 
 import (
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -10,10 +11,10 @@ import (
 var (
 	testInSpecMigrationResourceName = "souschef_inspec_migration.test"
 	testInSpecProfilePath           = getFixturePath("sample_inspec_profile")
-	testInSpecOutputPath            = getTestOutputPath("tests")
 )
 
 func TestAccInSpecMigrationResource(t *testing.T) {
+	testInSpecOutputPath := getTestOutputPath(t, "tests")
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -28,6 +29,7 @@ func TestAccInSpecMigrationResource(t *testing.T) {
 					resource.TestCheckResourceAttrSet(testInSpecMigrationResourceName, "id"),
 					resource.TestCheckResourceAttrSet(testInSpecMigrationResourceName, "profile_name"),
 					resource.TestCheckResourceAttrSet(testInSpecMigrationResourceName, "test_content"),
+					resource.TestMatchResourceAttr(testInSpecMigrationResourceName, "test_content", regexp.MustCompile(`(?m)^import pytest$`)),
 				),
 			},
 			// Update testing with different format
@@ -36,6 +38,7 @@ func TestAccInSpecMigrationResource(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(testInSpecMigrationResourceName, "output_format", "ansible"),
 					resource.TestCheckResourceAttrSet(testInSpecMigrationResourceName, "test_content"),
+					resource.TestMatchResourceAttr(testInSpecMigrationResourceName, "test_content", regexp.MustCompile(`(?m)^# Validation tasks converted from InSpec$`)),
 				),
 			},
 			// Test serverspec format
@@ -43,6 +46,7 @@ func TestAccInSpecMigrationResource(t *testing.T) {
 				Config: testAccInSpecMigrationResourceConfig("test", testInSpecProfilePath, testInSpecOutputPath, "serverspec"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(testInSpecMigrationResourceName, "output_format", "serverspec"),
+					resource.TestMatchResourceAttr(testInSpecMigrationResourceName, "test_content", regexp.MustCompile(`(?m)^require 'serverspec'$`)),
 				),
 			},
 			// Test goss format
@@ -50,6 +54,7 @@ func TestAccInSpecMigrationResource(t *testing.T) {
 				Config: testAccInSpecMigrationResourceConfig("test", testInSpecProfilePath, testInSpecOutputPath, "goss"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(testInSpecMigrationResourceName, "output_format", "goss"),
+					resource.TestMatchResourceAttr(testInSpecMigrationResourceName, "test_content", regexp.MustCompile(`(?m)^package:$`)),
 				),
 			},
 			// ImportState testing

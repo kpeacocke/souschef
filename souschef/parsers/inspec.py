@@ -9,8 +9,8 @@ from typing import Any
 from souschef.core.constants import ERROR_PREFIX, INSPEC_END_INDENT, INSPEC_SHOULD_EXIST
 from souschef.core.path_utils import (
     _ensure_within_base_path,
+    _get_workspace_root,
     _normalize_path,
-    _trusted_workspace_root,
     safe_glob,
     safe_read_text,
 )
@@ -47,7 +47,7 @@ def parse_inspec_profile(path: str) -> str:
         profile_path = _normalize_path(path)
 
         trusted_bases = [
-            _trusted_workspace_root(),
+            _get_workspace_root(),
             # Used as trusted base for containment validation only.
             # NOSONAR python:S5443
             Path(tempfile.gettempdir()).resolve(),
@@ -243,7 +243,7 @@ def _parse_controls_from_file(profile_path: Path) -> list[dict[str, Any]]:
     try:
         # Try multiple trusted bases to find the correct containment context
         trusted_bases = [
-            _trusted_workspace_root(),
+            _get_workspace_root(),
             # Used as trusted base for containment validation only.
             # NOSONAR python:S5443
             Path(tempfile.gettempdir()).resolve(),

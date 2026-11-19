@@ -19,20 +19,17 @@ var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServe
 	"souschef": providerserver.NewProtocol6WithError(New("test")()),
 }
 
-func testAccPreCheck(_ *testing.T) {
+func testAccPreCheck(t *testing.T) {
+	t.Helper()
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("Could not locate provider test file")
+	}
+	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(filename), "..", "..", ".."))
+	t.Setenv("SOUSCHEF_WORKSPACE_ROOT", repoRoot)
+
 	// Set default souschef path for testing if not set
 	if os.Getenv("TF_VAR_souschef_path") == "" {
-		// Get the directory of this test file
-		_, filename, _, ok := runtime.Caller(0)
-		if !ok {
-			return
-		}
-
-		// Navigate from provider_test.go location to repo root
-		// provider_test.go is in: terraform-provider/internal/provider/
-		repoRoot := filepath.Join(filepath.Dir(filename), "..", "..", "..")
-		repoRoot = filepath.Clean(repoRoot)
-
 		// Try common locations in order of preference
 		possiblePaths := []string{
 			// Poetry virtual environment (most common for macOS/Linux dev)
@@ -78,21 +75,15 @@ func getFixturePath(fixtureName string) string {
 	return filepath.Clean(fixturesPath)
 }
 
-// getTestOutputPath returns a writable output path under the repository root.
-// This avoids hardcoded absolute paths that may not be writable in CI.
-func getTestOutputPath(parts ...string) string {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		cwd, _ := os.Getwd()
-		base := filepath.Join(cwd, "test-output")
-		segments := append([]string{base}, parts...)
-		return filepath.Clean(filepath.Join(segments...))
+// getTestOutputPath returns an isolated output path cleaned up after the test.
+func getTestOutputPath(t *testing.T, parts ...string) string {
+	t.Helper()
+	segments := append([]string{t.TempDir()}, parts...)
+	output := filepath.Join(segments...)
+	if err := os.MkdirAll(filepath.Dir(output), 0755); err != nil {
+		t.Fatalf("Could not create output parent: %v", err)
 	}
-
-	repoRoot := filepath.Join(filepath.Dir(filename), "..", "..", "..")
-	base := filepath.Join(filepath.Clean(repoRoot), "test-output")
-	segments := append([]string{base}, parts...)
-	return filepath.Clean(filepath.Join(segments...))
+	return output
 }
 
 // TestAccProviderConfigure tests provider configuration with explicit path

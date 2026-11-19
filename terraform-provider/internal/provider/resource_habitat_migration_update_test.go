@@ -9,6 +9,7 @@ import (
 
 // TestAccHabitatMigrationResourceUpdate tests updating Habitat migration
 func TestAccHabitatMigrationResourceUpdate(t *testing.T) {
+	testHabitatOutputPath := getTestOutputPath(t, "docker")
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,

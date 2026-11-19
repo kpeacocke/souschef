@@ -1,5 +1,5 @@
 # Build Docker MCP CLI plugin from docker/mcp-gateway source
-FROM golang:1.25-bookworm AS docker-mcp-builder
+FROM golang:1.26-bookworm AS docker-mcp-builder
 WORKDIR /src
 RUN apt-get update && apt-get install -y --no-install-recommends make git && rm -rf /var/lib/apt/lists/*
 # Create the target directory that the Makefile expects
@@ -78,13 +78,18 @@ RUN chmod +x /usr/local/lib/docker/cli-plugins/docker-mcp && \
     apt-get install -y --no-install-recommends trivy && \
     rm -rf /var/lib/apt/lists/* && \
     if [ "$CODEQL_VERSION" != "skip" ]; then \
-    ARCH=$(uname -m); \
-    if [ "$ARCH" = "x86_64" ] || [ "$ARCH" = "amd64" ]; then \
-        curl -L --proto '=https' --tlsv1.2 https://github.com/github/codeql-cli-binaries/releases/latest/download/codeql-linux64.zip -o /tmp/codeql.zip && \
-        unzip /tmp/codeql.zip -d /opt && \
+        case "$(uname -m)" in \
+            x86_64|amd64) CODEQL_ARCHIVE=codeql-linux64.zip ;; \
+            aarch64|arm64) CODEQL_ARCHIVE=codeql-linux-arm64.zip ;; \
+            *) echo "Unsupported CodeQL architecture: $(uname -m)" >&2; exit 1 ;; \
+        esac && \
+        curl -fsSL --proto '=https' --tlsv1.2 "https://github.com/github/codeql-cli-binaries/releases/latest/download/${CODEQL_ARCHIVE}" -o "/tmp/${CODEQL_ARCHIVE}" && \
+        curl -fsSL --proto '=https' --tlsv1.2 "https://github.com/github/codeql-cli-binaries/releases/latest/download/${CODEQL_ARCHIVE}.checksum.txt" -o "/tmp/${CODEQL_ARCHIVE}.checksum.txt" && \
+        (cd /tmp && sha256sum --check "${CODEQL_ARCHIVE}.checksum.txt") && \
+        unzip -q "/tmp/${CODEQL_ARCHIVE}" -d /opt && \
         ln -s /opt/codeql/codeql /usr/local/bin/codeql && \
-        rm /tmp/codeql.zip; \
-    fi; \
+        codeql version --format=text && \
+        rm "/tmp/${CODEQL_ARCHIVE}" "/tmp/${CODEQL_ARCHIVE}.checksum.txt"; \
     fi && \
     if [ "$SONAR_SCANNER_VERSION" != "skip" ]; then \
     if [ "$SONAR_SCANNER_VERSION" = "latest" ]; then \

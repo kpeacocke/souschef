@@ -9,6 +9,7 @@ import (
 
 // TestAccInSpecMigrationResourceUpdateFormat tests updating output format
 func TestAccInSpecMigrationResourceUpdateFormat(t *testing.T) {
+	testInSpecOutputPath := getTestOutputPath(t, "tests")
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,

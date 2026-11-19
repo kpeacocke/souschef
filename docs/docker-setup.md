@@ -9,8 +9,13 @@ After changing the devcontainer configuration, rebuild the container to apply
 the extension and runtime settings. If SonarQube still cannot start, check for a
 workspace or folder `sonarlint.ls.javaHome` setting overriding the devcontainer
 setting; it must point to a Java home directory, not the `java` executable.
-The CodeQL CLI is installed in the container only on x86-64; CodeQL analysis on
-ARM64 remains available through GitHub Actions.
+The devcontainer installs the native CodeQL CLI on x86-64 and ARM64, and
+configures the extension to use `/usr/local/bin/codeql` inside the container.
+If CodeQL still reports a host-specific path, check for a workspace or folder
+`codeQL.cli.executablePath` setting overriding the devcontainer setting.
+When building with `CODEQL_VERSION=skip`, clear the remote CodeQL executable
+path setting or disable the extension; CodeQL analysis remains available in
+GitHub Actions.
 
 ## Accessing Services from Devcontainer
 
