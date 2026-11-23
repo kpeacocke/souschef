@@ -5922,14 +5922,14 @@ keyring = ["keyring (>=21.2.0)"]
 
 [[package]]
 name = "types-networkx"
-version = "3.6.1.20261108"
+version = "3.6.1.20261119"
 description = "Typing stubs for networkx"
 optional = false
 python-versions = ">=3.10"
 groups = ["dev"]
 files = [
-    {file = "types_networkx-3.6.1.20261108-py3-none-any.whl", hash = "sha256:6a1c168c311e0bb17033302aca3ce1ac280b41198e1532a591091b74513dc2b5"},
-    {file = "types_networkx-3.6.1.20261108.tar.gz", hash = "sha256:673f5d2e181749a39d3ef4c4dd045d47ad1a132b8a732748d44c753d2ae42c16"},
+    {file = "types_networkx-3.6.1.20261119-py3-none-any.whl", hash = "sha256:36c86f6c1ee2e5f83692ab788cb6f98896cd62f200b8f4b6d97f8a273116d6a0"},
+    {file = "types_networkx-3.6.1.20261119.tar.gz", hash = "sha256:05b593ed1afc407f2051a9d4a6aefe6c975de188fa1e7308d63b8ba8b973c429"},
 ]
 
 [package.extras]
