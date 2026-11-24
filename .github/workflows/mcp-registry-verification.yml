@@ -32,7 +32,7 @@ jobs:
           ref: 0d9040ddd7706e9a9cd36dc351067d34cd1581ac
           path: registry-entry
       - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5
         with:
           go-version-file: registry-tooling/go.mod
           cache-dependency-path: registry-tooling/go.sum
@@ -61,7 +61,7 @@ jobs:
           ref: a34df45d4ec0e941a9853ad768c4f6cd818966b3
           path: gateway-source
       - name: Set up Go for MCP Gateway
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5
         with:
           go-version-file: gateway-source/go.mod
           cache-dependency-path: gateway-source/go.sum
